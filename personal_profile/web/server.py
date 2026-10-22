@@ -7,8 +7,12 @@ API 一览：
   GET    /api/persons                             人物列表
   POST   /api/persons                             新增人物 {name, id?}
   GET    /api/persons/<pid>                       时间轴全量视图（快照+合并叶子+链接）
+  GET    /api/persons/<pid>/export                 导出人物为自包含 JSON（含全部快照与链接）
+  POST   /api/persons/import                       导入人物 JSON（body 即导出结构；冲突自动重映射）
   GET    /api/persons/<pid>/snapshots/<sid>       快照详情（含值来源标注 trace）
-  POST   /api/snapshots                           新增快照 {person, timestamp, label, inherits_from?, id?}
+  PUT    /api/persons/<pid>/snapshots/<sid>       快照改名 {label}
+  DELETE /api/persons/<pid>/snapshots/<sid>       删除快照（含相关链接，继承链自动衔接）
+  POST   /api/snapshots                           新增快照 {person, timestamp, label, inherits_from?, break_chain?, id?}（默认自动继承上一个）
   POST   /api/snapshots/inherits                  设置/清除继承 {person, snapshot, inherits_from|null}
   GET    /api/value?person=&snapshot=&path=       取值（沿链合并）
   POST   /api/value                               写值 {person, snapshot, path, value, unit?, name?}
@@ -36,8 +40,11 @@ if _ROOT not in sys.path:
 
 from personal_profile.ai.collector import get_collector  # noqa: E402
 from personal_profile.core import config as pp_config  # noqa: E402
+from personal_profile.core.logutil import get_logger  # noqa: E402
 from personal_profile.core.store import INHERIT_REQUIRED_LINKS, Archive, ArchiveError  # noqa: E402
 from personal_profile.paths import DATA_PATH, SCHEMA_PATH  # noqa: E402
+
+log = get_logger("web")  # 运行日志：logs/web.log（自动轮转）+ 控制台
 
 _WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 _TPL_DIR = os.path.join(_WEB_DIR, "templates")
@@ -77,6 +84,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, code: int, payload) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        if self.path.startswith("/api/"):
+            log.info("%s %s -> %d", self.command, self.path, code)
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -87,7 +96,20 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, payload if payload is not None else {"ok": True})
 
     def _fail(self, code: int, msg: str) -> None:
+        log.warning("%s %s -> %d 失败原因: %s", self.command, self.path, code, msg)
         self._json(code, {"error": msg})
+
+    @staticmethod
+    def _safe_body(b: dict) -> str:
+        """请求体摘要（脱敏：含 key/token/secret/password 的字段只留是否非空）。"""
+        parts = []
+        for k, v in b.items():
+            if any(s in k.lower() for s in ("key", "token", "secret", "password")):
+                parts.append(f"{k}={'***' if v else ''}")
+            else:
+                s = json.dumps(v, ensure_ascii=False)
+                parts.append(f"{k}={s if len(s) <= 120 else s[:120] + '...'}")
+        return " ".join(parts)
 
     def _body(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
@@ -131,6 +153,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._ok({"kind": "persons", "persons": archive.list_persons()})
             if len(parts) == 3 and parts[:2] == ["api", "persons"]:
                 return self._ok({**archive.tree(parts[2]), "kind": "tree"})
+            if len(parts) == 4 and parts[:2] == ["api", "persons"] and parts[3] == "export":
+                return self._ok({**archive.export_person(parts[2]), "kind": "person-export"})
             if len(parts) == 5 and parts[:2] == ["api", "persons"] and parts[3] == "snapshots":
                 pid, sid = parts[2], parts[4]
                 return self._ok({
@@ -159,22 +183,30 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             return self._fail(400, str(e))
         except Exception as e:  # noqa: BLE001
+            log.exception("未捕获异常 %s %s", self.command, self.path)
             return self._fail(500, f"internal: {type(e).__name__}: {e}")
 
     def do_POST(self) -> None:  # noqa: N802
         try:
             u = urlparse(self.path)
             b = self._body()
+            log.info("WRITE POST %s | %s", u.path, self._safe_body(b))
             if u.path == "/api/persons":
                 with _LOCK:
                     pid = archive.add_person(b.get("name") or "", b.get("id"))
                     archive.save()
                 return self._ok({"identity_id": pid})
+            if u.path == "/api/persons/import":
+                with _LOCK:
+                    res = archive.import_person(b)
+                    archive.save()
+                return self._ok(res)
             if u.path == "/api/snapshots":
                 with _LOCK:
                     sid = archive.add_snapshot(
                         b["person"], b["timestamp"], b.get("label") or "",
                         b.get("inherits_from"), b.get("id"),
+                        break_chain=bool(b.get("break_chain", False)),
                     )
                     archive.save()
                 return self._ok({"snapshot_id": sid})
@@ -196,6 +228,20 @@ class Handler(BaseHTTPRequestHandler):
                     )
                     archive.save()
                 return self._ok({"leaf": leaf})
+            if u.path == "/api/break":
+                with _LOCK:
+                    archive.set_break(
+                        b["person"], b["snapshot"], b["path"], bool(b.get("on", True)),
+                    )
+                    archive.save()
+                return self._ok()
+            if u.path == "/api/order":
+                with _LOCK:
+                    archive.set_order(
+                        b["person"], b["snapshot"], b.get("order") or [],
+                    )
+                    archive.save()
+                return self._ok()
             if u.path == "/api/links":
                 with _LOCK:
                     # auto_inherit：继承/因果链接且继承关系未建立时，先自动补建
@@ -258,12 +304,25 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             return self._fail(400, str(e))
         except Exception as e:  # noqa: BLE001
+            log.exception("未捕获异常 %s %s", self.command, self.path)
             return self._fail(500, f"internal: {type(e).__name__}: {e}")
 
     def do_DELETE(self) -> None:  # noqa: N802
         try:
             u = urlparse(self.path)
             b = self._body()
+            log.info("WRITE DELETE %s | %s", u.path, self._safe_body(b) if b else "")
+            parts = [p for p in u.path.split("/") if p]
+            if len(parts) == 3 and parts[:2] == ["api", "persons"]:
+                with _LOCK:
+                    archive.delete_person(parts[2])
+                    archive.save()
+                return self._ok()
+            if len(parts) == 5 and parts[:2] == ["api", "persons"] and parts[3] == "snapshots":
+                with _LOCK:
+                    archive.delete_snapshot(parts[2], parts[4])
+                    archive.save()
+                return self._ok()
             if u.path == "/api/value":
                 with _LOCK:
                     archive.del_value(b["person"], b["snapshot"], b["path"])
@@ -280,18 +339,44 @@ class Handler(BaseHTTPRequestHandler):
         except KeyError as e:
             return self._fail(400, f"缺少字段: {e}")
         except Exception as e:  # noqa: BLE001
+            log.exception("未捕获异常 %s %s", self.command, self.path)
             return self._fail(500, f"internal: {type(e).__name__}: {e}")
 
-    def log_message(self, *args) -> None:  # 静默访问日志
-        pass
+    def do_PUT(self) -> None:  # noqa: N802
+        try:
+            u = urlparse(self.path)
+            b = self._body()
+            log.info("WRITE PUT %s | %s", u.path, self._safe_body(b))
+            parts = [p for p in u.path.split("/") if p]
+            if len(parts) == 3 and parts[:2] == ["api", "persons"]:
+                with _LOCK:
+                    archive.rename_person(parts[2], b.get("name") or "")
+                    archive.save()
+                return self._ok()
+            if len(parts) == 5 and parts[:2] == ["api", "persons"] and parts[3] == "snapshots":
+                with _LOCK:
+                    archive.rename_snapshot(parts[2], parts[4], b.get("label") or "")
+                    archive.save()
+                return self._ok()
+            return self._fail(404, "unknown api")
+        except ArchiveError as e:
+            return self._fail(400, str(e))
+        except Exception as e:  # noqa: BLE001
+            log.exception("未捕获异常 %s %s", self.command, self.path)
+            return self._fail(500, f"internal: {type(e).__name__}: {e}")
+
+    def log_message(self, fmt, *args) -> None:  # 标准访问日志走 debug（仅落文件，不刷控制台）
+        log.debug("%s - %s", self.address_string(), fmt % args)
 
 
 def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"PersonalProfile Web running at http://{HOST}:{PORT}")
+    log.info("========== PersonalProfile Web 启动 http://%s:%d | 数据: %s ==========", HOST, PORT, DATA_FILE)
+    print(f"PersonalProfile Web running at http://{HOST}:{PORT}  (日志: logs/web.log)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        log.info("========== PersonalProfile Web 停止 ==========")
         server.server_close()
 
 

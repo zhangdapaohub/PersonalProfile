@@ -17,7 +17,10 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from personal_profile.cli.commands import build_parser, render_text  # noqa: E402
+from personal_profile.core.logutil import get_logger  # noqa: E402
 from personal_profile.core.store import Archive, ArchiveError  # noqa: E402
+
+log = get_logger("cli", console=False)  # 命令留痕：logs/cli.log（只落文件，不混入命令输出）
 
 
 def main(argv=None) -> int:
@@ -28,13 +31,16 @@ def main(argv=None) -> int:
             pass
     parser = build_parser()
     args = parser.parse_args(argv)
+    log.info("CMD %s", " ".join(argv if argv is not None else sys.argv[1:]))
     try:
         archive = Archive(args.data).load()
         payload = args.func(archive, args)
     except ArchiveError as e:
+        log.warning("CMD 失败(ArchiveError): %s", e)
         print(json.dumps({"error": str(e)}, ensure_ascii=False))
         return 1
     except Exception as e:  # noqa: BLE001 未预期异常也以 JSON 反馈，便于 AI 解析
+        log.exception("CMD 未捕获异常")
         print(json.dumps({"error": f"internal: {type(e).__name__}: {e}"}, ensure_ascii=False))
         return 2
     if args.pretty:

@@ -22,8 +22,10 @@ from typing import Any, Optional
 
 from personal_profile.paths import SCHEMA_PATH
 
-# 连贯性链接语义（已定稿；扩展时只需在此追加）
-LINK_TYPES = ("继承", "因果", "断裂", "主动重塑")
+# 连贯性链接语义（属性级关系；扩展时只需在此追加）。
+# 注意：「断裂」不再是链接类型——它是「属性级中断继承」动作（见 Snapshot.broken），
+# 标记记录在属性当前所在的快照上：本态仍显示，从下一个快照起不再继承显示。
+LINK_TYPES = ("继承", "因果", "主动重塑")
 
 # 需要 to 态确实继承自 from 态的链接类型
 INHERIT_REQUIRED_LINKS = ("继承", "因果")
@@ -86,7 +88,60 @@ class Archive:
             self.db.setdefault("persons", {})
         else:
             self.db = copy.deepcopy(EMPTY_DB)
+        self._migrate()
         return self
+
+    def _migrate(self) -> None:
+        """向后兼容迁移（幂等，仅在确有变化时落盘）：
+        - 为旧快照补齐 broken / order 字段；
+        - 旧版「断裂」类型链接 → 属性级断裂：在 to 态的 to_path 上标记 broken，
+          并移除该链接（断裂本就不是一种关联）。
+        """
+        import shutil
+
+        dirty = False
+        # 迁移前先判断是否存在旧版「断裂」链接（用于决定是否备份真实数据）
+        has_legacy_break = any(
+            lk.get("type") == "断裂"
+            for p in self.db.get("persons", {}).values()
+            for lk in p.get("continuity_links", [])
+        )
+        for p in self.db.get("persons", {}).values():
+            for s in p.get("snapshots", {}).values():
+                if "broken" not in s:
+                    s["broken"] = []
+                    dirty = True
+                if "order" not in s:
+                    s["order"] = []
+                    dirty = True
+            # 旧版「断裂」链接 → 属性级断裂（记录在属性当前所在的 from 快照，
+            # 效果：from 的下一个快照起不再继承显示）
+            old_links = p.get("continuity_links", [])
+            new_links = []
+            for lk in old_links:
+                if lk.get("type") == "断裂":
+                    frm_id, frm_path = lk.get("from"), lk.get("from_path")
+                    snap = p.get("snapshots", {}).get(frm_id)
+                    if snap and frm_path:
+                        broken = snap.setdefault("broken", [])
+                        if frm_path not in broken:
+                            broken.append(frm_path)
+                        dirty = True
+                    # 该链接不再作为关联存在
+                else:
+                    new_links.append(lk)
+            if len(new_links) != len(old_links):
+                p["continuity_links"] = new_links
+                dirty = True
+        if dirty:
+            # 迁移前先备份一次真实数据（仅当确有旧断裂链接要转换时）
+            bak = self.data_path + ".pre-break-migrate.bak"
+            if has_legacy_break and not os.path.exists(bak):
+                try:
+                    shutil.copy2(self.data_path, bak)
+                except OSError:
+                    pass
+            self.save()
 
     def save(self) -> None:
         """原子写：先写临时文件再 replace，避免写坏数据。"""
@@ -182,6 +237,143 @@ class Archive:
     def get_person(self, person_id: str) -> dict:
         return self._person(person_id)
 
+    def rename_person(self, person_id: str, name: str) -> dict:
+        p = self._person(person_id)
+        if not name:
+            raise ArchiveError("name 不能为空")
+        p["name"] = name
+        return p
+
+    def rename_snapshot(self, person_id: str, snapshot_id: str, label: str) -> dict:
+        """修改快照标签（仅展示名，不影响 id / 继承链 / 链接端点）。"""
+        snap = self._snapshot(person_id, snapshot_id)
+        if not label or not label.strip():
+            raise ArchiveError("label 不能为空")
+        snap["label"] = label.strip()
+        return snap
+
+    def delete_person(self, person_id: str) -> dict:
+        """删除人物及其全部快照与连贯性链接（不可恢复）。"""
+        p = self._person(person_id)
+        del self.db["persons"][person_id]
+        return p
+
+    def export_person(self, person_id: str) -> dict:
+        """导出整个人物（含全部快照与链接）为自包含 JSON，便于备份 / 迁移 / 跨端导入。"""
+        p = self._person(person_id)
+        return {
+            "format": "personal-profile/person",
+            "version": 1,
+            "person": {
+                "identity_id": p["identity_id"],
+                "name": p["name"],
+                "snapshots": [
+                    {
+                        "id": s["id"],
+                        "timestamp": s["timestamp"],
+                        "label": s["label"],
+                        "inherits_from": s["inherits_from"],
+                        "overrides": copy.deepcopy(s["overrides"]),
+                        "broken": copy.deepcopy(s.get("broken", [])),
+                        "order": copy.deepcopy(s.get("order", [])),
+                    }
+                    for s in p["snapshots"].values()
+                ],
+            },
+            "links": copy.deepcopy(p["continuity_links"]),
+        }
+
+    def import_person(self, data: dict) -> dict:
+        """从导出 JSON 导入一整个人物（含全部快照与链接）。
+
+        与现有人物 identity_id 冲突时，自动重新生成 id（人物 + 全部快照 + 链接端点统一重映射），
+        并将名称追加「 (导入)」以示区分，避免覆盖已有数据。返回导入结果摘要。
+        """
+        if not isinstance(data, dict):
+            raise ArchiveError("导入数据必须是 JSON 对象")
+        person = data.get("person")
+        if not isinstance(person, dict) or not person.get("name"):
+            raise ArchiveError("导入数据缺少 person.name")
+        snapshots = person.get("snapshots")
+        if not isinstance(snapshots, list) or not snapshots:
+            raise ArchiveError("导入数据必须包含至少一个快照（person.snapshots）")
+
+        desired_id = person.get("identity_id")
+        remap = bool(desired_id and desired_id in self.db["persons"])
+        pid = desired_id if (desired_id and not remap) else _gen_id("p", self.db["persons"])
+        name = person["name"]
+        if remap:
+            name = f"{name} (导入)"
+
+        # 快照 id 重映射：old -> new（仅冲突时整体重映射，避免继承链断裂）
+        mapping: dict = {}
+        new_snaps: dict = {}
+        for s in snapshots:
+            if not isinstance(s, dict) or not s.get("id"):
+                raise ArchiveError("快照缺少 id 字段")
+            try:
+                datetime.date.fromisoformat(s["timestamp"])
+            except (TypeError, ValueError):
+                raise ArchiveError(f"快照 timestamp 非法: {s.get('timestamp')}")
+            old_id = s["id"]
+            new_id = old_id if not remap else _gen_id("s", set(new_snaps))
+            mapping[old_id] = new_id
+            new_snaps[new_id] = {
+                "id": new_id,
+                "timestamp": s["timestamp"],
+                "label": s.get("label") or "",
+                "inherits_from": None,  # 稍后按映射表回填
+                "overrides": copy.deepcopy(s.get("overrides") or {}),
+                "broken": copy.deepcopy(s.get("broken") or []),
+                "order": copy.deepcopy(s.get("order") or []),
+            }
+        # 回填 inherits_from（继承链保持原结构）
+        for s in snapshots:
+            parent = s.get("inherits_from")
+            new_snaps[mapping[s["id"]]]["inherits_from"] = mapping.get(parent) if parent else None
+
+        # 链接端点重映射（端点缺失则跳过该链接）
+        new_links = []
+        seen_lids: set = set()
+        for lk in (data.get("links") or []):
+            if not isinstance(lk, dict):
+                continue
+            # 旧版「断裂」链接在导入时同样转为属性级断裂（记录在 from 快照，不再作为关联）
+            if lk.get("type") == "断裂":
+                frm = mapping.get(lk.get("from"))
+                frm_path = lk.get("from_path")
+                if frm and frm_path:
+                    broken = new_snaps[frm].setdefault("broken", [])
+                    if frm_path not in broken:
+                        broken.append(frm_path)
+                continue
+            frm = mapping.get(lk.get("from"))
+            to = mapping.get(lk.get("to"))
+            if not frm or not to:
+                continue
+            link_id = lk.get("link_id")
+            if not link_id or link_id in seen_lids or remap:
+                link_id = _gen_id("l", seen_lids)
+            seen_lids.add(link_id)
+            new_links.append({
+                "link_id": link_id,
+                "from": frm, "from_path": lk.get("from_path", ""),
+                "to": to, "to_path": lk.get("to_path", ""),
+                "type": lk.get("type", "继承"),
+                "note": lk.get("note", ""),
+            })
+
+        self.db["persons"][pid] = {
+            "identity_id": pid,
+            "name": name,
+            "snapshots": new_snaps,
+            "continuity_links": new_links,
+        }
+        return {
+            "identity_id": pid, "name": name, "renamed": remap,
+            "snapshot_count": len(new_snaps), "link_count": len(new_links),
+        }
+
     # ================= Snapshot =================
 
     def add_snapshot(
@@ -191,7 +383,18 @@ class Archive:
         label: str,
         inherits_from: Optional[str] = None,
         snapshot_id: Optional[str] = None,
+        break_chain: bool = False,
     ) -> str:
+        """新增时间快照。
+
+        继承关系规则（默认「自动继承上一个」，兼顾可覆盖/可断开）：
+        - inherits_from 显式给定 → 以该快照为父（校验存在）；
+        - 否则 break_chain=True → 显式建为独立根态（inherits_from=None）；
+        - 否则（默认）→ 自动继承该人物时间轴上 timestamp 紧邻且小于当前的最大快照，
+          若无更早快照则成为根态。
+        插入后若处于两个已有快照之间，会把原本继承「本态前驱」的紧邻下一个快照改挂到
+        本态，使「继承上一个」在时间轴变动后仍成立（显式指定其他父态的快照不被改动）。
+        """
         p = self._person(person_id)
         try:
             datetime.date.fromisoformat(timestamp)
@@ -199,6 +402,14 @@ class Archive:
             raise ArchiveError(f"timestamp 需为 ISO 日期 YYYY-MM-DD: {timestamp}")
         if not label:
             raise ArchiveError("label 不能为空")
+        if inherits_from is None and not break_chain:
+            # 默认：自动继承时间轴上紧邻的上一个（timestamp 严格小于当前的最大值）
+            prev = None
+            for s in p["snapshots"].values():
+                if s["timestamp"] < timestamp:
+                    if prev is None or s["timestamp"] > prev["timestamp"]:
+                        prev = s
+            inherits_from = prev["id"] if prev else None
         if inherits_from is not None and inherits_from not in p["snapshots"]:
             raise ArchiveError(f"父快照不存在: {inherits_from}")
         if snapshot_id is None:
@@ -211,7 +422,26 @@ class Archive:
             "label": label,
             "inherits_from": inherits_from,
             "overrides": {},
+            "broken": [],
+            "order": [],
         }
+        # 插入「中间」快照时，维持「每个快照继承时间轴上紧邻的上一个」这一语义：
+        # 若紧邻下一个快照 N 当前正继承自本快照的前驱，则把它改挂到本快照。
+        # 显式指定了其他父态（N.inherits_from != 前驱）的快照不受影响。
+        prev_by_time = None
+        nxt = None
+        for s in p["snapshots"].values():
+            if s["id"] == snapshot_id:
+                continue
+            if s["timestamp"] < timestamp:
+                if prev_by_time is None or s["timestamp"] > prev_by_time["timestamp"]:
+                    prev_by_time = s
+            elif s["timestamp"] > timestamp:
+                if nxt is None or s["timestamp"] < nxt["timestamp"]:
+                    nxt = s
+        if (prev_by_time is not None and nxt is not None
+                and nxt["inherits_from"] == prev_by_time["id"]):
+            nxt["inherits_from"] = snapshot_id
         return snapshot_id
 
     def set_inherits(self, person_id: str, snapshot_id: str, parent_id: Optional[str]) -> dict:
@@ -246,13 +476,37 @@ class Archive:
         p = self._person(person_id)
         return sorted(p["snapshots"].values(), key=lambda s: s["timestamp"])
 
+    def delete_snapshot(self, person_id: str, snapshot_id: str) -> dict:
+        """删除快照（时间轴节点）及其相关链接；继承链自动衔接（原本继承自它的子态改挂到它的父态）。
+
+        不可恢复。
+        """
+        p = self._person(person_id)
+        snap = self._snapshot(person_id, snapshot_id)
+        parent = snap.get("inherits_from")
+        del p["snapshots"][snapshot_id]
+        # 级联删除引用该快照的连贯性链接
+        p["continuity_links"] = [
+            lk for lk in p["continuity_links"]
+            if lk["from"] != snapshot_id and lk["to"] != snapshot_id
+        ]
+        # 继承链衔接：原本继承自它的子态改挂到它的父态（无父则成为独立根态）
+        for s in p["snapshots"].values():
+            if s.get("inherits_from") == snapshot_id:
+                s["inherits_from"] = parent
+        return snap
+
     # ================= 值操作（增量解析核心） =================
 
     def resolve_value(self, person_id: str, snapshot_id: str, path: str) -> Optional[dict]:
-        """沿 inherits_from 链合并解析：本态 overrides 命中即返回，否则逐级查父态。"""
+        """沿 inherits_from 链合并解析：本态 overrides 命中即返回，否则逐级查父态。
+        祖先快照（非本态）若对该 path 标记了 broken，则视为不再继承（返回 None）。
+        本态自身的 broken 不影响本态显示（断裂=从下一个快照起不再继承）。"""
         _validate_path(path)
         p = self._person(person_id)
-        for snap in self._chain(p, snapshot_id):
+        for i, snap in enumerate(self._chain(p, snapshot_id)):  # [本态...根态]
+            if i > 0 and path in snap.get("broken", []):
+                return None
             leaf = snap["overrides"].get(path)
             if leaf is not None:
                 return leaf
@@ -287,24 +541,62 @@ class Archive:
             raise ArchiveError(f"本态 overrides 中不存在该 path: {path}")
         return snap["overrides"].pop(path)
 
+    def set_break(self, person_id: str, snapshot_id: str, path: str, on: bool) -> dict:
+        """属性级「断裂」（中断继承）开关。断裂标记记录在当前快照上。
+
+        on=True：在本态标记 path 为 broken —— 本态自身仍正常显示该属性，
+        从本态的下一个快照起不再继承显示（即使祖先有定义），直至后代显式覆盖重新引入。
+        on=False：取消标记，恢复后代继承。
+        与「删本态覆盖」不同：删覆盖后祖先值在本态会重新生效且后代仍继承；断裂则专门阻断向后代传递。
+        """
+        _validate_path(path)
+        snap = self._snapshot(person_id, snapshot_id)
+        broken = snap.setdefault("broken", [])
+        if on:
+            if path not in broken:
+                broken.append(path)
+        else:
+            snap["broken"] = [x for x in broken if x != path]
+        return snap
+
+    def set_order(self, person_id: str, snapshot_id: str, order: list) -> dict:
+        """设置本态卡项内属性值的展示顺序（仅影响显示排序，不影响继承语义）。
+        order 为 path 字符串数组。"""
+        if not isinstance(order, list) or not all(isinstance(x, str) for x in order):
+            raise ArchiveError("order 必须为字符串路径数组")
+        snap = self._snapshot(person_id, snapshot_id)
+        snap["order"] = list(order)
+        return snap
+
     def resolved_leaves(self, person_id: str, snapshot_id: str) -> dict:
-        """某快照的完整合并视图：{path: leaf}（本态 + 全部继承）。"""
+        """某快照的完整合并视图：{path: leaf}（本态 + 全部继承）。
+        祖先快照对该 path 标记 broken → 本态及全部后代不再显示/继承；
+        本态自身标记的 broken 不影响本态显示（断裂=从下一个快照起不再继承）。"""
         p = self._person(person_id)
         self._snapshot(person_id, snapshot_id)
+        chain = self._chain(p, snapshot_id)  # [本态...根态]
         merged: dict = {}
-        for s in reversed(self._chain(p, snapshot_id)):  # 根态先写入，子态覆盖
-            merged.update(s["overrides"])
+        for i, s in enumerate(reversed(chain)):  # 根态先写入，子态覆盖；最后一个为本态
+            merged.update(s.get("overrides", {}))
+            if i < len(chain) - 1:  # 跳过本态自身的 broken
+                for path in s.get("broken", []):
+                    merged.pop(path, None)
         return merged
 
     def resolve_trace(self, person_id: str, snapshot_id: str) -> dict:
         """合并视图 + 值来源标注：{path: {"leaf": leaf, "source": snapshot_id}}。
-        source=本态 id 表示本态覆盖，否则为继承来源快照。供 Web 可视化标注。"""
+        source=本态 id 表示本态覆盖，否则为继承来源快照。供 Web 可视化标注。
+        被祖先 broken 的属性不会出现在结果中（本态自身的 broken 不隐藏本态显示）。"""
         p = self._person(person_id)
         self._snapshot(person_id, snapshot_id)
+        chain = self._chain(p, snapshot_id)
         traced: dict = {}
-        for s in reversed(self._chain(p, snapshot_id)):
-            for path, leaf in s["overrides"].items():
+        for i, s in enumerate(reversed(chain)):
+            for path, leaf in s.get("overrides", {}).items():
                 traced[path] = {"leaf": leaf, "source": s["id"]}
+            if i < len(chain) - 1:  # 跳过本态自身的 broken
+                for path in s.get("broken", []):
+                    traced.pop(path, None)
         return traced
 
     # ================= 连贯性链接 =================
@@ -389,6 +681,7 @@ class Archive:
                     "inherits_from": s["inherits_from"],
                     "resolved": self.resolved_leaves(person_id, s["id"]),
                     "own_overrides": len(s["overrides"]),
+                    "order": s.get("order", []),
                 }
             )
         return {

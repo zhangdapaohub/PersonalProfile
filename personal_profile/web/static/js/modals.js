@@ -7,7 +7,8 @@ import { loadConfig } from "./actions.js";
 export function openSnapshotModal() {
   if (!state.current) return toast("请先选择人物", true);
   const sel = document.getElementById("snapInherits");
-  sel.innerHTML = '<option value="">独立根态（不继承）</option>' +
+  sel.innerHTML = '<option value="">自动继承上一个（推荐）</option>' +
+    '<option value="__root__">独立根态（不继承）</option>' +
     state.tree.snapshots.map(s =>
       `<option value="${esc(s.id)}">${esc(s.label)}（${esc(s.id)}）</option>`).join("");
   document.getElementById("snapTs").value = new Date().toISOString().slice(0, 10);

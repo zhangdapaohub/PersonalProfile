@@ -41,20 +41,65 @@ def cmd_add_person(a, args):
     return {"kind": "person", "identity_id": pid, "name": args.name}
 
 
+def cmd_rename_person(a, args):
+    p = a.rename_person(args.person, args.name)
+    a.save()
+    return {"kind": "person", "identity_id": args.person, "name": p["name"], "note": "已重命名"}
+
+
+def cmd_rename_snapshot(a, args):
+    snap = a.rename_snapshot(args.person, args.snapshot, args.label)
+    a.save()
+    return {"kind": "snapshot", "person": args.person, "snapshot": args.snapshot,
+            "label": snap["label"], "note": "已重命名"}
+
+
+def cmd_del_person(a, args):
+    p = a.get_person(args.person)
+    if not args.yes:
+        print(f"确认删除人物「{p['name']}」({args.person}) 及其全部快照与链接？此操作不可恢复。")
+        if input("输入 yes 确认: ").strip().lower() != "yes":
+            return {"kind": "person", "cancelled": True, "note": "已取消删除",
+                    "identity_id": args.person, "name": p["name"]}
+    removed = a.delete_person(args.person)
+    a.save()
+    return {"kind": "person", "identity_id": args.person, "name": removed["name"], "note": "已删除"}
+
+
 def cmd_list_persons(a, args):
     return {"kind": "persons", "persons": a.list_persons()}
 
 
-def cmd_add_snapshot(a, args):
-    sid = a.add_snapshot(args.person, args.timestamp, args.label, args.inherits_from, args.id)
+def cmd_export_person(a, args):
+    data = a.export_person(args.person)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return {"kind": "export", "person": args.person, "file": args.out,
+                "name": data["person"]["name"], "snapshot_count": len(data["person"]["snapshots"]),
+                "link_count": len(data["links"]), "note": f"已导出至 {args.out}"}
+    return {"kind": "export-json", "data": data}
+
+
+def cmd_import_person(a, args):
+    with open(args.file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    res = a.import_person(data)
     a.save()
+    return {"kind": "import", **res}
+
+
+def cmd_add_snapshot(a, args):
+    sid = a.add_snapshot(args.person, args.timestamp, args.label, args.inherits_from, args.id, break_chain=args.break_chain)
+    a.save()
+    snap = a.get_snapshot(args.person, sid)
     return {
         "kind": "snapshot",
         "snapshot_id": sid,
         "person": args.person,
         "timestamp": args.timestamp,
         "label": args.label,
-        "inherits_from": args.inherits_from,
+        "inherits_from": snap["inherits_from"],
     }
 
 
@@ -69,6 +114,20 @@ def cmd_set_inherits(a, args):
         "inherits_from": snap["inherits_from"],
         "note": "已改为独立根态" if parent is None else f"继承关系已建立: {args.snapshot} → {parent}",
     }
+
+
+def cmd_del_snapshot(a, args):
+    snap = a.get_snapshot(args.person, args.snapshot)
+    if not args.yes:
+        print(f"确认删除快照「{snap.get('label')}」({args.snapshot}，person={args.person}) 及其相关链接？"
+              f"继承链将自动衔接。此操作不可恢复。")
+        if input("输入 yes 确认: ").strip().lower() != "yes":
+            return {"kind": "snapshot", "cancelled": True, "note": "已取消删除",
+                    "identity_id": args.person, "snapshot_id": args.snapshot}
+    removed = a.delete_snapshot(args.person, args.snapshot)
+    a.save()
+    return {"kind": "snapshot", "snapshot_id": args.snapshot, "person": args.person,
+            "label": removed.get("label"), "note": "已删除（继承链已衔接）"}
 
 
 def cmd_set(a, args):
@@ -94,6 +153,22 @@ def cmd_del_value(a, args):
     return {"kind": "deleted", "person": args.person, "snapshot": args.snapshot,
             "path": args.path, "removed": removed,
             "note": "本态覆盖已删；父态值（若有）重新生效"}
+
+
+def cmd_break(a, args):
+    snap = a.set_break(args.person, args.snapshot, args.path, not args.off)
+    a.save()
+    return {"kind": "break", "person": args.person, "snapshot": args.snapshot,
+            "path": args.path, "on": not args.off, "broken": snap["broken"],
+            "note": f"{'已断裂' if not args.off else '已恢复继承'}: {args.path}"}
+
+
+def cmd_order(a, args):
+    order = [p.strip() for p in args.order.split(",") if p.strip()]
+    snap = a.set_order(args.person, args.snapshot, order)
+    a.save()
+    return {"kind": "order", "person": args.person, "snapshot": args.snapshot,
+            "order": snap["order"], "note": "展示顺序已更新"}
 
 
 def cmd_tree(a, args):
@@ -186,17 +261,43 @@ def build_parser() -> argparse.ArgumentParser:
 
     _p("list-persons", "列出所有人物", cmd_list_persons)
 
-    p = _p("add-snapshot", "新增时间快照（增量：--inherits-from 指向父态，不传即独立根态）", cmd_add_snapshot)
+    p = _p("export-person", "导出人物为 JSON 文件（--out 指定路径，缺省打印到标准输出）", cmd_export_person)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--out", help="导出文件路径（如 张三.json）；缺省打印 JSON 到标准输出")
+
+    p = _p("import-person", "从 JSON 文件导入一整个人物（含全部快照与链接）", cmd_import_person)
+    p.add_argument("--file", required=True, help="导出 JSON 文件路径")
+
+    p = _p("rename-person", "重命名人物", cmd_rename_person)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--name", required=True, help="新名称")
+
+    p = _p("del-person", "删除人物（含全部快照与链接，不可恢复）", cmd_del_person)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--yes", action="store_true", help="跳过交互确认（危险操作）")
+
+    p = _p("add-snapshot", "新增时间快照（默认继承时间轴上一个；--inherits-from 指定父态，--break 显式建为独立根态）", cmd_add_snapshot)
     p.add_argument("--person", required=True, help="identity_id")
     p.add_argument("--timestamp", required=True, help="ISO 日期 YYYY-MM-DD")
     p.add_argument("--label", required=True, help="该时间态标签（如 '20岁的张三'）")
-    p.add_argument("--inherits-from", help="父快照 id（默认 null = 独立根态）")
+    p.add_argument("--inherits-from", help="父快照 id（默认自动继承上一个；不再接受 none，建独立根态请用 --break）")
+    p.add_argument("--break", dest="break_chain", action="store_true", help="显式建为独立根态（不继承任何快照）")
     p.add_argument("--id", help="snapshot_id（默认自动生成 s_xxx）")
 
     p = _p("set-inherits", "给已存在的快照设置/修改/清除继承关系（--parent none 清除）", cmd_set_inherits)
     p.add_argument("--person", required=True, help="identity_id")
     p.add_argument("--snapshot", required=True, help="要修改的快照 id")
     p.add_argument("--parent", required=True, help="父快照 id；传 none 表示清除继承（改为独立根态）")
+
+    p = _p("del-snapshot", "删除时间快照（含相关链接，继承链自动衔接，不可恢复）", cmd_del_snapshot)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--snapshot", required=True, help="要删除的快照 id")
+    p.add_argument("--yes", action="store_true", help="跳过交互确认（危险操作）")
+
+    p = _p("rename-snapshot", "修改快照标签（仅展示名，不影响 id/继承链/链接）", cmd_rename_snapshot)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--snapshot", required=True, help="快照 id")
+    p.add_argument("--label", required=True, help="新标签")
 
     p = _p("set", "写值（copy-on-write，只写本态 overrides；path 可为模板外自由维度）", cmd_set)
     p.add_argument("--person", required=True)
@@ -215,6 +316,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--person", required=True)
     p.add_argument("--snapshot", required=True)
     p.add_argument("--path", required=True)
+
+    p = _p("break", "属性级断裂：在本态标记某属性不再继承（--off 取消，恢复继承）", cmd_break)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--snapshot", required=True, help="快照 id")
+    p.add_argument("--path", required=True, help="维度路径，如 physical.body_shape.height")
+    p.add_argument("--off", action="store_true", help="取消断裂（恢复继承）")
+
+    p = _p("order", "设置某快照卡项内属性值的展示顺序（逗号分隔的 path 列表）", cmd_order)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--snapshot", required=True, help="快照 id")
+    p.add_argument("--order", required=True, help="path 列表，逗号分隔，如 a.b,c.d（仅影响显示排序）")
 
     p = _p("tree", "时间轴视图（默认视图：快照按时间排列 + 合并叶子 + 链接）", cmd_tree)
     p.add_argument("--person", required=True)
@@ -275,12 +387,28 @@ def render_text(payload: dict) -> str:
         return f"已删除 {payload['path']}（原值: {payload['removed']['value']}）；{payload['note']}"
     if kind == "inherits":
         return f"{payload['snapshot']} 的继承关系: {payload['inherits_from'] or '独立根态'}（{payload['note']}）"
+    if kind == "snapshot":
+        if payload.get("cancelled"):
+            return f"已取消删除 {payload.get('snapshot_id', '')}"
+        note = payload.get("note", "")
+        return f"{note} {payload.get('label', '')} ({payload.get('snapshot_id', '')})".strip()
+    if kind == "person":
+        note = payload.get("note", "")
+        return f"{note} {payload.get('name', '')} ({payload.get('identity_id', '')})".strip()
     if kind == "persons":
         lines = [
             f"{p['identity_id']}  {p['name']}  (快照 {p['snapshot_count']}, 链接 {p['link_count']})"
             for p in payload["persons"]
         ]
         return "\n".join(lines) or "(无人物)"
+    if kind == "export":
+        return (f"{payload['note']}\n"
+                f"人物: {payload['name']} ({payload['person']})\n"
+                f"快照 {payload['snapshot_count']} 个，链接 {payload['link_count']} 条")
+    if kind == "import":
+        suffix = "（id 冲突，已自动重映射并更名）" if payload.get("renamed") else ""
+        return (f"已导入人物: {payload['name']} ({payload['identity_id']}){suffix}\n"
+                f"快照 {payload['snapshot_count']} 个，链接 {payload['link_count']} 条")
     if kind == "links":
         lines = [
             f"{lk['link_id']}  {lk['from']}.{lk.get('from_path', '')} → {lk['to']}.{lk.get('to_path', '')}  [{lk['type']}]"
@@ -288,4 +416,8 @@ def render_text(payload: dict) -> str:
             for lk in payload["links"]
         ]
         return "\n".join(lines) or "(无链接)"
+    if kind == "break":
+        return f"{payload['note']}（当前 broken: {', '.join(payload['broken']) or '无'}）"
+    if kind == "order":
+        return f"{payload['note']}（顺序: {', '.join(payload['order']) or '默认'}）"
     return json.dumps(payload, ensure_ascii=False, indent=2)

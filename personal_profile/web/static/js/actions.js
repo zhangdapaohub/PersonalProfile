@@ -21,22 +21,84 @@ export async function submitPerson() {
   } catch (e) { toast(e.message, true); }
 }
 
+/* ---------- 人物重命名 / 删除 ---------- */
+
+export async function renamePerson(pid, oldName) {
+  const name = prompt("重命名人物为：", oldName || "");
+  if (name === null) return;            // 取消
+  const n = name.trim();
+  if (!n) return toast("名称不能为空", true);
+  try {
+    await api("/api/persons/" + encodeURIComponent(pid), {
+      method: "PUT",
+      body: JSON.stringify({ name: n }),
+    });
+    toast("已重命名为：" + n);
+    await loadPersons();
+  } catch (e) { toast(e.message, true); }
+}
+
+export async function deletePerson(pid, name) {
+  if (!confirm(`确认删除人物「${name}」及其全部快照与链接？此操作不可恢复。`)) return;
+  try {
+    await api("/api/persons/" + encodeURIComponent(pid), { method: "DELETE" });
+    toast("已删除：" + name);
+    state.current = null;
+    await loadPersons();
+  } catch (e) { toast(e.message, true); }
+}
+
 /* ---------- 快照 ---------- */
+
+export async function renameSnapshot(sid, oldLabel) {
+  const label = prompt("重命名时间态为：", oldLabel || "");
+  if (label === null) return;           // 取消
+  const n = label.trim();
+  if (!n) return toast("标签不能为空", true);
+  try {
+    await api(`/api/persons/${encodeURIComponent(state.current)}/snapshots/${encodeURIComponent(sid)}`, {
+      method: "PUT",
+      body: JSON.stringify({ label: n }),
+    });
+    toast("已重命名为：" + n);
+    await selectPerson(state.current);
+    if (state.selected === sid) await selectSnapshot(sid);
+  } catch (e) { toast(e.message, true); }
+}
 
 export async function submitSnapshot() {
   const timestamp = document.getElementById("snapTs").value;
   const label = document.getElementById("snapLabel").value.trim();
-  const inherits_from = document.getElementById("snapInherits").value || null;
   if (!timestamp || !label) return toast("请填写时间与标签", true);
+  const sel = document.getElementById("snapInherits").value;
+  let inherits_from = null, break_chain = false;
+  if (sel === "__root__") break_chain = true;       // 显式独立根态
+  else if (sel) inherits_from = sel;                 // 显式指定父态
+  // 否则（""）= 默认自动继承上一个
   try {
     await api("/api/snapshots", {
       method: "POST",
-      body: JSON.stringify({ person: state.current, timestamp, label, inherits_from }),
+      body: JSON.stringify({ person: state.current, timestamp, label, inherits_from, break_chain }),
     });
     closeModal("snapshotModal");
     toast("快照已创建：" + label);
     await selectPerson(state.current);
     state.selected = null;
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ---------- 快照删除 ---------- */
+
+export async function deleteSnapshot(sid) {
+  const label = state.tree.snapshots.find(s => s.id === sid)?.label || sid;
+  if (!confirm(`确认删除时间态「${label}」(${sid}) 及其相关链接？\n继承链将自动衔接，此操作不可恢复。`)) return;
+  try {
+    await api(`/api/persons/${encodeURIComponent(state.current)}/snapshots/${encodeURIComponent(sid)}`, {
+      method: "DELETE",
+    });
+    toast("已删除：" + label);
+    if (state.selected === sid) state.selected = null;
+    await selectPerson(state.current);
   } catch (e) { toast(e.message, true); }
 }
 
@@ -93,34 +155,67 @@ export async function delLink(linkId) {
 /* ---------- 值 ---------- */
 
 export async function submitValue() {
+  const sid = state.selected;  // 先捕获，selectPerson 会把它置 null
   const path = document.getElementById("vPath").value.trim();
   const raw = document.getElementById("vValue").value;
   const unit = document.getElementById("vUnit").value.trim() || null;
   const name = document.getElementById("vName").value.trim() || null;
   if (!path || !raw) return toast("请填写路径与值", true);
+  if (!sid) return toast("请先在时间轴上选择一个时间态", true);
   try {
     await api("/api/value", {
       method: "POST",
       body: JSON.stringify({
-        person: state.current, snapshot: state.selected,
+        person: state.current, snapshot: sid,
         path, value: parseValue(raw), unit, name,
       }),
     });
     toast("已写入：" + path);
     await selectPerson(state.current);
-    await selectSnapshot(state.selected);
+    await selectSnapshot(sid);
   } catch (e) { toast(e.message, true); }
 }
 
 export async function delValue(path) {
+  const sid = state.selected;  // 先捕获，selectPerson 会把它置 null
+  if (!sid) return toast("请先在时间轴上选择一个时间态", true);
   try {
     await api("/api/value", {
       method: "DELETE",
-      body: JSON.stringify({ person: state.current, snapshot: state.selected, path }),
+      body: JSON.stringify({ person: state.current, snapshot: sid, path }),
     });
     toast("已删除本态覆盖：" + path);
     await selectPerson(state.current);
-    await selectSnapshot(state.selected);
+    await selectSnapshot(sid);
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ---------- 属性级断裂（中断继承） ---------- */
+
+export async function setBreak(path, on) {
+  const sid = state.selected;  // 先捕获，selectPerson 会把它置 null
+  if (!sid) return toast("请先在时间轴上选择一个时间态", true);
+  try {
+    await api("/api/break", {
+      method: "POST",
+      body: JSON.stringify({ person: state.current, snapshot: sid, path, on }),
+    });
+    toast(on ? `已断裂：${path}（后续卡项不再继承）` : `已恢复继承：${path}`);
+    await selectPerson(state.current);
+    await selectSnapshot(sid);
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ---------- 卡项内属性值展示排序 ---------- */
+
+export async function reorderSnapshot(sid, order) {
+  try {
+    await api("/api/order", {
+      method: "POST",
+      body: JSON.stringify({ person: state.current, snapshot: sid, order }),
+    });
+    const snap = state.tree.snapshots.find(s => s.id === sid);
+    if (snap) snap.order = order;  // 本地同步，避免整树重渲染
   } catch (e) { toast(e.message, true); }
 }
 
@@ -160,6 +255,45 @@ export async function submitCollect() {
   } catch (e) {
     out.textContent = "错误：" + e.message;
     toast(e.message, true);
+  }
+}
+
+/* ---------- 人物导入 / 导出 ---------- */
+
+export async function exportPerson(pid, name) {
+  const id = pid || state.current;
+  if (!id) return toast("请先选择要导出的人物", true);
+  const persona = state.persons.find(p => p.identity_id === id);
+  const fname = (name || persona?.name || id) + ".json";
+  try {
+    const d = await api("/api/persons/" + encodeURIComponent(id) + "/export");
+    const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast("已导出：" + fname);
+  } catch (e) { toast(e.message, true); }
+}
+
+export async function importPersonFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const d = await api("/api/persons/import", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    toast("已导入：" + d.name + (d.renamed ? "（重映射）" : ""));
+    await loadPersons();
+    selectPerson(d.identity_id);
+  } catch (e) {
+    toast("导入失败：" + e.message, true);
   }
 }
 

@@ -2,8 +2,9 @@
 
 import { api } from "./api.js";
 import { state, LINK_STYLE } from "./state.js";
-import { esc, fmtVal, displayLabel, toast } from "./util.js";
-import { renderDetail } from "./detail.js";
+import { esc, fmtVal, displayLabel, toast, sortByOrder } from "./util.js";
+import { renderDetail, renderLinkDetail } from "./detail.js";
+import { reorderSnapshot } from "./actions.js";
 
 export function renderTimeline() {
   const tl = document.getElementById("timeline");
@@ -27,7 +28,7 @@ export function renderTimeline() {
   for (const s of tree.snapshots) {
     const el = document.createElement("div");
     const isBreak = !s.inherits_from && tree.snapshots.length > 1;
-    el.className = "snap" + (s.inherits_from ? " inherits" : "") + (s.id === state.selected ? " selected" : "");
+    el.className = "snap" + (s.inherits_from ? " inherits" : "") + (isBreak ? " brk" : "") + (s.id === state.selected ? " selected" : "");
     el.dataset.sid = s.id;
 
     /* 值预览：前 4 项 + 所有作为链接端点但未入选的属性（保证锚点可见） */
@@ -36,17 +37,20 @@ export function renderTimeline() {
     for (const [p, leaf] of entries) {
       if (s.id + "|" + p in endpointStyle) picked.set(p, leaf);
     }
-    const vals = [...picked.entries()];
+    const vals = sortByOrder([...picked.entries()], s.order);
     const more = entries.length - vals.length;
 
     el.innerHTML = `
-      <span class="dot"></span>
+      <span class="snap-node" title="${s.inherits_from ? "继承态" : (isBreak ? "独立态" : "根态")}"></span>
+      <span class="snap-connector"></span>
       <div class="snap-body">
         <div class="snap-head">
           <span class="ts">${esc(s.timestamp)}</span>
           <b>${esc(s.label)}</b>
+          <button class="snap-del" title="重命名此时间态" onclick="event.stopPropagation(); renameSnapshot('${s.id}', '${esc(s.label).replace(/'/g, "\\'")}')">✎</button>
           ${s.inherits_from ? "" : '<span class="badge ' + (isBreak ? "brk" : "root") + '">' + (isBreak ? "独立态" : "根态") + "</span>"}
           <span class="badge">本态覆盖 ${s.own_overrides} 项</span>
+          <button class="snap-del push" title="删除此时间态（含相关链接，继承链自动衔接）" onclick="event.stopPropagation(); deleteSnapshot('${s.id}')">✕</button>
         </div>
         <div class="snap-meta">${esc(s.id)}${s.inherits_from ? " · 继承自 " + esc(s.inherits_from) : ""} · 合并后 ${Object.keys(s.resolved).length} 项</div>
         <div class="mini-vals">
@@ -59,11 +63,45 @@ export function renderTimeline() {
       </div>`;
     el.onclick = () => selectSnapshot(s.id);
     tl.appendChild(el);
+    enableDrag(el, s.id);
   }
   requestAnimationFrame(drawLinks);
 }
 
+/* 卡项内属性值拖拽排序：拖动 .mini-val 调整顺序，松手后持久化到快照的 order */
+function enableDrag(card, sid) {
+  const items = () => [...card.querySelectorAll(".mini-val")];
+  let dragEl = null;
+  items().forEach(it => {
+    it.setAttribute("draggable", "true");
+    it.addEventListener("dragstart", (e) => {
+      dragEl = it;
+      e.stopPropagation();
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", it.dataset.path); } catch { /* 某些浏览器要求 */ }
+    });
+    it.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+    });
+    it.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!dragEl || dragEl === it) return;
+      const box = card.querySelector(".mini-vals");
+      const rect = it.getBoundingClientRect();
+      const after = (e.clientY - rect.top) > rect.height / 2;
+      if (after) box.insertBefore(dragEl, it.nextSibling);
+      else box.insertBefore(dragEl, it);
+      dragEl = null;
+      reorderSnapshot(sid, items().map(x => x.dataset.path));
+    });
+  });
+}
+
 export async function selectSnapshot(sid) {
+  clearLinkSelection();
   state.selected = sid;
   document.querySelectorAll(".snap").forEach(el =>
     el.classList.toggle("selected", el.dataset.sid === sid));
@@ -111,10 +149,9 @@ export function drawLinks() {
     if (st.dash) path.setAttribute("stroke-dasharray", st.dash);
     path.setAttribute("marker-end", `url(#${st.marker})`);
     path.setAttribute("opacity", "0.85");
-    const attrLabel = lk.from_path && lk.to_path
-      ? `${shortPath(lk.from_path)} → ${shortPath(lk.to_path)}` : "";
+    path.style.cursor = "pointer";
     const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    title.textContent = `${lk.type}：${lk.from}${lk.from_path ? "." + lk.from_path : ""} → ${lk.to}${lk.to_path ? "." + lk.to_path : ""}${lk.note ? " · " + lk.note : ""}`;
+    title.textContent = `${lk.type}：${lk.from}${lk.from_path ? "." + lk.from_path : ""} → ${lk.to}${lk.to_path ? "." + lk.to_path : ""}${lk.note ? " · " + lk.note : ""}（点击查看详情）`;
     path.appendChild(title);
     svg.appendChild(path);
 
@@ -122,35 +159,29 @@ export function drawLinks() {
     const endSel = (sid, p) =>
       p ? wrap.querySelector(`.snap[data-sid="${CSS.escape(sid)}"] .mini-val[data-path="${CSS.escape(p)}"]`) : null;
     path.addEventListener("mouseenter", () => {
-      path.setAttribute("stroke-width", "4");
+      if (!path.classList.contains("link-sel")) path.setAttribute("stroke-width", "4");
       for (const el of [endSel(lk.from, lk.from_path), endSel(lk.to, lk.to_path)])
         if (el) el.classList.add("linked-hit");
     });
     path.addEventListener("mouseleave", () => {
-      path.setAttribute("stroke-width", "2.2");
+      if (!path.classList.contains("link-sel")) path.setAttribute("stroke-width", "2.2");
       wrap.querySelectorAll(".mini-val.linked-hit").forEach(el => el.classList.remove("linked-hit"));
     });
-
-    if (attrLabel) {
-      // 连线中点标注属性（贝塞尔中点近似取 t=0.5）
-      const mx = (p1.x + 3 * (p1.x + bend) + 3 * (p2.x + bend) + p2.x) / 8;
-      const my = (p1.y + 3 * p1.y + 3 * p2.y + p2.y) / 8;
-      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      text.setAttribute("x", mx);
-      text.setAttribute("y", my - 5);
-      text.setAttribute("text-anchor", "middle");
-      text.setAttribute("font-size", "10.5");
-      text.setAttribute("fill", st.color);
-      text.setAttribute("opacity", "0.9");
-      text.setAttribute("style", "paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;");
-      text.textContent = attrLabel;
-      svg.appendChild(text);
-    }
+    /* 点击连线：在右侧卡片显示链接详情，并持久高亮两端属性行 */
+    path.addEventListener("click", () => {
+      clearLinkSelection();
+      path.classList.add("link-sel");
+      for (const el of [endSel(lk.from, lk.from_path), endSel(lk.to, lk.to_path)])
+        if (el) el.classList.add("linked-sel");
+      renderLinkDetail(lk);
+    });
   });
 }
 
-/* 属性短标签：取维度路径末两级，避免连线标注过长 */
-function shortPath(p) {
-  const segs = p.split(".");
-  return segs.slice(-2).join(".");
+/* 清除连线选中态（点击快照或切换连线时调用） */
+function clearLinkSelection() {
+  document.querySelectorAll("#linkLayer path.link-sel").forEach(p => p.classList.remove("link-sel"));
+  document.querySelectorAll(".mini-val.linked-sel").forEach(el => el.classList.remove("linked-sel"));
 }
+/* 供详情卡片"定位起点/终点"按钮调用（复用快照详情渲染） */
+window.selectSnapshotFromLink = (sid) => selectSnapshot(sid);

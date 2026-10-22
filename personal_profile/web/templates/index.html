@@ -22,10 +22,9 @@
       <ul class="legend">
         <li><span class="line" style="--c:#2563eb"></span>继承 <em>引用父态，差异增量</em></li>
         <li><span class="line" style="--c:#059669"></span>因果 <em>由前态演变而来</em></li>
-        <li><span class="line dashed" style="--c:#dc2626"></span>断裂 <em>独立新态，不继承</em></li>
         <li><span class="line dotted" style="--c:#7c3aed"></span>主动重塑 <em>重构信念与角色</em></li>
       </ul>
-      <p class="hint">连线为<b>属性级</b>：从起始快照的某个属性行出发，指向目标快照的具体属性行（带圆点的属性行即连线端点）。悬停连线可高亮两端属性。</p>
+      <p class="hint">连线为<b>属性级</b>：从起始快照的某个属性行出发，指向目标快照的具体属性行（带圆点的属性行即连线端点）。悬停连线可高亮两端属性，<b>点击连线</b>在右侧卡片查看关联详情。<br><b>属性级断裂</b>：在右侧值行点「断」，本快照仍显示该值，<b>下一个快照起不再继承显示</b>（点「恢复」撤销）。</p>
     </section>
     <section class="card">
       <h3>操作</h3>
@@ -33,8 +32,11 @@
         <button class="btn" onclick="openSnapshotModal()">＋ 添加快照</button>
         <button class="btn" onclick="openLinkModal()">＋ 添加链接</button>
         <button class="btn ghost" onclick="openCollectModal()">✦ AI 采集</button>
+        <button class="btn" onclick="exportPerson()">⤓ 导出当前人物</button>
+        <button class="btn ghost" onclick="document.getElementById('importFile').click()">⤒ 导入人物</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
       </div>
-      <p class="hint">点击快照查看详情；悬停连线查看关联说明。</p>
+      <p class="hint">点击快照查看该时间态详情；<b>点击时间轴上的连线</b>查看属性关联详情。</p>
     </section>
   </aside>
 
@@ -44,11 +46,11 @@
       <span class="sub">每个节点 = 一个时间态 · 曲线 = 连贯性链接</span>
     </div>
     <div class="timeline-wrap" id="timelineWrap">
-      <svg id="linkLayer"><defs>
-        <marker id="arr-blue"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/></marker>
-        <marker id="arr-green"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#059669"/></marker>
-        <marker id="arr-red"    viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#dc2626"/></marker>
-        <marker id="arr-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7c3aed"/></marker>
+      <svg id="linkLayer">      <defs>
+        <marker id="arr-blue"   viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/></marker>
+        <marker id="arr-green"  viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#059669"/></marker>
+        <marker id="arr-red"    viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#dc2626"/></marker>
+        <marker id="arr-purple" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7c3aed"/></marker>
       </defs></svg>
       <div id="timeline"></div>
       <div class="empty" id="timelineEmpty">尚无快照 · 点击左侧「添加快照」开始记录第一个时间态</div>
@@ -110,7 +112,7 @@
     </div>
     <label>类型
       <select id="linkType">
-        <option>继承</option><option>因果</option><option>断裂</option><option>主动重塑</option>
+        <option>继承</option><option>因果</option><option>主动重塑</option>
       </select>
     </label>
     <label class="check-row"><input type="checkbox" id="linkAutoInherit" checked>

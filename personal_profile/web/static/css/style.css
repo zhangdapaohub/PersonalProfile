@@ -44,6 +44,18 @@ body {
 }
 .tab:hover { border-color: var(--primary); color: var(--primary); }
 .tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+/* 人物标签：名称 + 改名/删除操作 */
+.tab-wrap { display: inline-flex; align-items: stretch; gap: 0; border: 1.5px solid var(--line); border-radius: 999px; overflow: hidden; background: #fff; }
+.tab-wrap.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.tab-wrap .tab { border: 0; border-radius: 0; background: transparent; }
+.tab-wrap .tab:hover { border-color: transparent; color: var(--primary); }
+.tab-wrap.active .tab { background: transparent; color: var(--primary); }
+.tab-act {
+  border: 0; background: transparent; cursor: pointer; padding: 0 8px;
+  font-size: 13px; color: var(--muted); line-height: 1;
+}
+.tab-act:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, #fff); }
+.tab-act.del:hover { color: #dc2626; background: #fdecec; }
 
 /* ---------- 布局 ---------- */
 .layout {
@@ -91,6 +103,8 @@ body {
 .btn.ghost { background: transparent; }
 .btn.danger { color: #dc2626; }
 .btn.danger:hover { border-color: #dc2626; }
+.btn.warn { color: #b45309; }
+.btn.warn:hover { border-color: #b45309; color: #b45309; }
 .btn.mini { padding: 3px 9px; font-size: 12px; border-radius: 7px; }
 
 /* ---------- 时间轴 ---------- */
@@ -98,30 +112,52 @@ body {
 .timeline-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
 .timeline-head h2 { font-size: 19px; }
 .timeline-head .sub { font-size: 12.5px; color: var(--muted); }
-.timeline-wrap { position: relative; padding: 18px 4px 10px; }
+.timeline-wrap { position: relative; padding: 18px 4px 10px 0; }
 #linkLayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-#linkLayer path { pointer-events: stroke; cursor: help; transition: stroke-width .15s; }
+#linkLayer path { pointer-events: stroke; cursor: pointer; transition: stroke-width .15s; }
 #linkLayer path:hover { stroke-width: 4; }
+#linkLayer path.link-sel { stroke-width: 4 !important; filter: drop-shadow(0 1px 4px rgba(0,0,0,.3)); }
+
+/* 主干线：贯穿时间轴的纵向轴线 */
+.timeline-wrap::before {
+  content: ""; position: absolute; left: 22px; top: 0; bottom: 0; width: 2px;
+  background: var(--rail, #d8ddf0); z-index: 0;
+}
 
 .snap {
-  position: relative;
+  position: relative; z-index: 1;
   display: flex; gap: 14px; align-items: flex-start;
-  padding: 12px 14px; margin: 0 0 18px 34px;
+  padding: 12px 14px; margin: 0 0 18px 44px;
   background: #fff; border: 1.5px solid var(--line); border-radius: 12px;
   cursor: pointer; transition: all .18s;
 }
 .snap:hover { border-color: #c3c8f8; box-shadow: var(--shadow); transform: translateY(-1px); }
 .snap.selected { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft), var(--shadow); }
-.snap .dot {
-  position: absolute; left: -34px; top: 20px;
-  width: 13px; height: 13px; border-radius: 50%;
+/* 卡项接到主干：节点（主干上的圆点）+ 横档（连到卡项） */
+.snap-node {
+  position: absolute; left: -28px; top: 22px;
+  width: 14px; height: 14px; border-radius: 50%;
   background: var(--primary); border: 3px solid #fff;
-  box-shadow: 0 0 0 2px var(--primary);
+  box-shadow: 0 0 0 2px var(--primary); z-index: 2;
 }
-.snap.inherits .dot { background: #fff; }
+.snap.inherits .snap-node { background: #fff; box-shadow: 0 0 0 2px var(--primary); }
+.snap.brk .snap-node { background: #dc2626; box-shadow: 0 0 0 2px #dc2626; }
+.snap-connector {
+  position: absolute; left: -21px; top: 29px;
+  width: 21px; height: 2px; background: var(--rail, #c3c8f0); z-index: 1;
+}
 .snap-body { flex: 1; min-width: 0; }
 .snap-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .snap-head b { font-size: 15px; }
+/* 卡项操作按钮（hover 变红；点击已 stopPropagation，不会触发选中） */
+.snap-del {
+  flex: none;
+  width: 22px; height: 22px; line-height: 1; border: none; border-radius: 6px;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.snap-del.push { margin-left: auto; }  /* 最后一个按钮（✕）推到行尾 */
+.snap-del:hover { background: #fdecec; color: #dc2626; }
 .ts {
   font-family: var(--mono); font-size: 12px; color: var(--primary);
   background: var(--primary-soft); padding: 2px 8px; border-radius: 6px;
@@ -141,6 +177,8 @@ body {
 .mini-more { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 /* 链接端点属性行：圆点标记 + 高亮（与连线颜色联动） */
+.mini-val { cursor: grab; }
+.mini-val:active { cursor: grabbing; }
 .mini-val.linked { position: relative; padding-left: 2px; }
 .mini-val .ldot {
   display: inline-block; width: 7px; height: 7px; border-radius: 50%;
@@ -153,6 +191,20 @@ body {
   box-shadow: inset 0 0 0 1.5px var(--lc, var(--primary));
 }
 .mini-val.linked-hit .ldot { transform: scale(1.25); transition: transform .12s; }
+/* 点击连线后的持久高亮（区别于悬停的临时 linked-hit） */
+.mini-val.linked-sel {
+  outline: 2px solid var(--lc, #2563eb); outline-offset: 1px; border-radius: 6px;
+  background: color-mix(in srgb, var(--lc, #2563eb) 16%, #fff);
+}
+
+/* 链接详情卡片（点击时间轴连线后展示于右侧面板） */
+.link-mid { text-align: center; font-weight: 600; font-size: 12.5px; margin: 6px 0; letter-spacing: .04em; }
+.link-note {
+  font-size: 13px; color: #3a4258; line-height: 1.7;
+  background: #f6f7fb; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
+}
+.val-row.muted { background: transparent; }
+.val-row.muted .val-path { color: var(--muted); font-style: italic; }
 
 .empty {
   padding: 46px 20px; text-align: center; color: var(--muted);
@@ -183,7 +235,9 @@ body {
 }
 .src.own { background: #e5f7ef; color: #057a4e; }
 .src.inh { background: #eef0ff; color: var(--primary); }
+.src.brk { background: #fdecec; color: #dc2626; }
 .val-ops { display: flex; gap: 4px; flex: none; }
+.break-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .links-in-detail { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
 .link-chip {
   font-size: 12px; padding: 7px 10px; border-radius: 9px;

@@ -10,12 +10,38 @@ export function renderTabs() {
   const nav = document.getElementById("personTabs");
   nav.innerHTML = "";
   for (const p of state.persons) {
+    const wrap = document.createElement("div");
+    wrap.className = "tab-wrap" + (p.identity_id === state.current ? " active" : "");
+
     const b = document.createElement("button");
-    b.className = "tab" + (p.identity_id === state.current ? " active" : "");
+    b.className = "tab";
     b.textContent = p.name;
     b.title = p.identity_id;
     b.onclick = () => selectPerson(p.identity_id);
-    nav.appendChild(b);
+
+    const ren = document.createElement("button");
+    ren.className = "tab-act";
+    ren.textContent = "✎";
+    ren.title = "重命名人物";
+    ren.onclick = (e) => { e.stopPropagation(); window.renamePerson(p.identity_id, p.name); };
+
+    const del = document.createElement("button");
+    del.className = "tab-act del";
+    del.textContent = "✕";
+    del.title = "删除人物（含全部快照与链接）";
+    del.onclick = (e) => { e.stopPropagation(); window.deletePerson(p.identity_id, p.name); };
+
+    const exp = document.createElement("button");
+    exp.className = "tab-act";
+    exp.textContent = "⤓";
+    exp.title = "导出该人物为 JSON";
+    exp.onclick = (e) => { e.stopPropagation(); window.exportPerson(p.identity_id, p.name); };
+
+    wrap.appendChild(b);
+    wrap.appendChild(exp);
+    wrap.appendChild(ren);
+    wrap.appendChild(del);
+    nav.appendChild(wrap);
   }
 }
 

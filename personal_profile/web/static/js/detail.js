@@ -37,12 +37,25 @@ export function renderDetail(d) {
           ${item.leaf.unit ? `<span class="val-unit">${esc(item.leaf.unit)}</span>` : ""}
           <span class="src ${own ? "own" : "inh"}" title="值来源快照">${own ? "本态" : "← " + esc(item.source)}</span>
           <span class="val-ops">
-            <button class="btn mini" onclick="prefillForm('${esc(path)}')">改</button>
-            ${own ? `<button class="btn mini danger" onclick="delValue('${esc(path)}')">删</button>` : ""}
+            ${own ? `<button class="btn mini" onclick="prefillForm('${esc(path)}')">改</button>
+            <button class="btn mini danger" onclick="delValue('${esc(path)}')">删</button>` : ""}
+            <button class="btn mini warn" title="断裂：本快照仍显示该值，下一个快照起不再继承显示" onclick="setBreak('${esc(path)}', true)">断</button>
           </span>
         </div>`;
       }).join("")}
     `).join("") || '<div class="empty">该时间态暂无任何值</div>'}
+    ${s.broken && s.broken.length ? `
+      <div class="group-title">已断裂（下一个快照起不再继承）</div>
+      <div class="break-list">
+        ${s.broken.map(p => `
+          <div class="val-row">
+            <span class="val-path" title="${esc(p)}">${esc(p)}</span>
+            <span class="src brk">断裂</span>
+            <span class="val-ops">
+              <button class="btn mini" onclick="setBreak('${esc(p)}', false)">恢复</button>
+            </span>
+          </div>`).join("")}
+      </div>` : ""}
     ${myLinks.length ? `
       <div class="group-title">关联关系</div>
       <div class="links-in-detail">
@@ -79,4 +92,49 @@ export function prefillForm(path) {
   document.getElementById("vName").value = it && it.leaf.name && it.leaf.name !== path.split(".").pop()
     ? it.leaf.name : "";
   document.getElementById("vPath").focus();
+}
+
+/* 点击时间轴连线后在右侧卡片展示链接详情（属性级：从某态某属性 → 另一态某属性） */
+export function renderLinkDetail(lk) {
+  const panel = document.getElementById("detailPanel");
+  const st = LINK_STYLE[lk.type] || LINK_STYLE["继承"];
+  const snapFrom = state.tree.snapshots.find(s => s.id === lk.from);
+  const snapTo = state.tree.snapshots.find(s => s.id === lk.to);
+  const fromLeaf = lk.from_path && snapFrom ? snapFrom.resolved[lk.from_path] : null;
+  const toLeaf = lk.to_path && snapTo ? snapTo.resolved[lk.to_path] : null;
+
+  const attrRow = (snap, path, leaf) => {
+    if (!path)
+      return `<div class="val-row muted"><span class="val-path">快照级链接（无具体属性）</span></div>`;
+    return `<div class="val-row">
+      <span class="val-path" title="${esc(path)}">${esc(displayLabel(path, leaf))}</span>
+      <span class="val-data" title="${esc(path)} = ${leaf ? esc(fmtVal(leaf.value)) : ""}">${leaf ? esc(fmtVal(leaf.value)) : "—"}</span>
+      ${leaf && leaf.unit ? `<span class="val-unit">${esc(leaf.unit)}</span>` : ""}
+      <span class="src inh" title="来源快照">${esc(snap ? snap.label : "")}</span>
+    </div>`;
+  };
+
+  panel.innerHTML = `
+    <div class="detail-head">
+      <h2>连贯性链接</h2>
+      <span class="src inh" style="color:${st.color}">${esc(lk.type)}</span>
+    </div>
+    <div class="detail-sub">从「${esc(snapFrom ? snapFrom.label : lk.from)}」的属性指向「${esc(snapTo ? snapTo.label : lk.to)}」的属性</div>
+
+    <div class="group-title">起点属性</div>
+    ${attrRow(snapFrom, lk.from_path, fromLeaf)}
+
+    <div class="link-mid" style="color:${st.color}">↓ ${esc(lk.type)}</div>
+
+    <div class="group-title">终点属性</div>
+    ${attrRow(snapTo, lk.to_path, toLeaf)}
+
+    ${lk.note ? `<div class="group-title">说明</div><div class="link-note">${esc(lk.note)}</div>` : ""}
+
+    <div class="form-actions">
+      <button class="btn" onclick="selectSnapshotFromLink('${esc(lk.from)}')">定位起点</button>
+      <button class="btn" onclick="selectSnapshotFromLink('${esc(lk.to)}')">定位终点</button>
+      ${lk.link_id ? `<button class="btn danger" onclick="delLink('${esc(lk.link_id)}')">删除此链接</button>` : ""}
+    </div>
+  `;
 }
