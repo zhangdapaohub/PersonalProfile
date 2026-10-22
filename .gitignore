@@ -1,0 +1,24 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# ── 运行时敏感/个人数据（不入库，仅保留目录结构）──
+# config.json 含明文 API key；archive.json 为真实个人档案
+data/config.json
+data/archive.json
+
+# ── 编辑器 / 系统 ──
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+
+# ── 本地环境 ──
+.venv/
+venv/
+.env

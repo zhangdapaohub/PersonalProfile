@@ -1,0 +1,17 @@
+{
+  "physical": { "name": "物理维度", "children": {
+    "body_shape": { "name": "体型", "children": {
+      "height": { "name": "身高", "unit": "cm" },
+      "weight": { "name": "体重", "unit": "kg" }
+    }}
+  }},
+  "mental": { "name": "精神维度", "children": {
+    "cognitive": { "name": "认知", "children": { "thoughts": { "name": "思想" } }},
+    "tendency": { "name": "倾向", "children": { "preferences": { "name": "偏好" } }}
+  }},
+  "timeline": { "name": "时间线维度", "children": {
+    "life_stage": { "name": "人生阶段" },
+    "role": { "name": "角色" },
+    "milestone": { "name": "里程碑" }
+  }}
+}

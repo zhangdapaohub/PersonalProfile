@@ -1,0 +1,2 @@
+# 运行时数据目录：config.json 与 archive.json 已被 .gitignore 排除，不入库。
+# 首次运行 python -m personal_profile.web.server 会自动生成这两个文件（若不存在）。

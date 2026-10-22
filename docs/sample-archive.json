@@ -1,0 +1,89 @@
+{
+  "persons": {
+    "p_zhangsan": {
+      "identity_id": "p_zhangsan",
+      "name": "张三",
+      "snapshots": {
+        "s_2020": {
+          "id": "s_2020",
+          "timestamp": "2020-01-01",
+          "label": "20岁的张三",
+          "inherits_from": null,
+          "overrides": {
+            "physical.body_shape.height": {"name": "身高", "value": 175, "unit": "cm"},
+            "physical.body_shape.weight": {"name": "体重", "value": 60, "unit": "kg"},
+            "mental.cognitive.thoughts": {"name": "思想", "value": "理想主义"},
+            "mental.tendency.preferences": {"name": "偏好", "value": ["极简", "理想"]},
+            "timeline.life_stage": {"name": "人生阶段", "value": "青年"},
+            "timeline.role": {"name": "角色", "value": "学生"}
+          }
+        },
+        "s_2023": {
+          "id": "s_2023",
+          "timestamp": "2023-01-01",
+          "label": "23岁的张三",
+          "inherits_from": "s_2020",
+          "overrides": {
+            "mental.cognitive.thoughts": {"name": "思想", "value": "务实转向中"},
+            "physical.body_shape.weight": {"name": "体重", "value": 68, "unit": "kg"},
+            "timeline.role": {"name": "角色", "value": "职场新人"}
+          }
+        },
+        "s_2026": {
+          "id": "s_2026",
+          "timestamp": "2026-01-01",
+          "label": "26岁的张三",
+          "inherits_from": "s_2023",
+          "overrides": {}
+        },
+        "s_2028": {
+          "id": "s_2028",
+          "timestamp": "2028-01-01",
+          "label": "28岁的张三（断裂）",
+          "inherits_from": null,
+          "overrides": {
+            "physical.body_shape.height": {"name": "身高", "value": 178, "unit": "cm"},
+            "physical.body_shape.weight": {"name": "体重", "value": 75, "unit": "kg"},
+            "mental.cognitive.thoughts": {"name": "思想", "value": "彻底重构"},
+            "mental.tendency.preferences": {"name": "偏好", "value": ["效率", "务实"]},
+            "timeline.life_stage": {"name": "人生阶段", "value": "青年后期"},
+            "timeline.role": {"name": "角色", "value": "创业者"}
+          }
+        },
+        "s_2030": {
+          "id": "s_2030",
+          "timestamp": "2030-01-01",
+          "label": "30岁的张三（主动重塑）",
+          "inherits_from": "s_2028",
+          "overrides": {
+            "mental.cognitive.beliefs": {"name": "信念", "value": ["独立", "长期主义"]},
+            "timeline.role": {"name": "角色", "value": "创始人"}
+          }
+        }
+      },
+      "continuity_links": [
+        {"link_id": "l1", "from": "s_2020", "to": "s_2023", "type": "因果", "note": "职业起步，思想与体重演变"},
+        {"link_id": "l2", "from": "s_2023", "to": "s_2026", "type": "继承", "note": "稳态延续，无显著变化"},
+        {"link_id": "l3", "from": "s_2026", "to": "s_2028", "type": "断裂", "note": "创业致价值观与角色断裂式重构，不继承前态"},
+        {"link_id": "l4", "from": "s_2028", "to": "s_2030", "type": "主动重塑", "note": "在断裂态上主动建立新信念体系；含模板外自由维度 beliefs"}
+      ]
+    },
+    "p_lisi": {
+      "identity_id": "p_lisi",
+      "name": "李四",
+      "snapshots": {
+        "s_l1": {
+          "id": "s_l1",
+          "timestamp": "2025-01-01",
+          "label": "李四",
+          "inherits_from": null,
+          "overrides": {
+            "physical.body_shape.height": {"name": "身高", "value": 180, "unit": "cm"},
+            "mental.tendency.preferences": {"name": "偏好", "value": ["安静"]}
+          }
+        }
+      },
+      "continuity_links": []
+    }
+  }
+}

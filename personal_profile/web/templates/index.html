@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>个人档案 · PersonalProfile</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">个人档案<span class="brand-en">PersonalProfile</span></div>
+  <nav class="person-tabs" id="personTabs"></nav>
+  <button class="btn primary" onclick="openModal('personModal')">＋ 新建人物</button>
+</header>
+
+<main class="layout">
+
+  <aside class="col-side">
+    <section class="card">
+      <h3>连贯性图例</h3>
+      <ul class="legend">
+        <li><span class="line" style="--c:#2563eb"></span>继承 <em>引用父态，差异增量</em></li>
+        <li><span class="line" style="--c:#059669"></span>因果 <em>由前态演变而来</em></li>
+        <li><span class="line dashed" style="--c:#dc2626"></span>断裂 <em>独立新态，不继承</em></li>
+        <li><span class="line dotted" style="--c:#7c3aed"></span>主动重塑 <em>重构信念与角色</em></li>
+      </ul>
+      <p class="hint">连线为<b>属性级</b>：从起始快照的某个属性行出发，指向目标快照的具体属性行（带圆点的属性行即连线端点）。悬停连线可高亮两端属性。</p>
+    </section>
+    <section class="card">
+      <h3>操作</h3>
+      <div class="actions">
+        <button class="btn" onclick="openSnapshotModal()">＋ 添加快照</button>
+        <button class="btn" onclick="openLinkModal()">＋ 添加链接</button>
+        <button class="btn ghost" onclick="openCollectModal()">✦ AI 采集</button>
+      </div>
+      <p class="hint">点击快照查看详情；悬停连线查看关联说明。</p>
+    </section>
+  </aside>
+
+  <section class="card timeline-card">
+    <div class="timeline-head">
+      <h2 id="personTitle">时间轴</h2>
+      <span class="sub">每个节点 = 一个时间态 · 曲线 = 连贯性链接</span>
+    </div>
+    <div class="timeline-wrap" id="timelineWrap">
+      <svg id="linkLayer"><defs>
+        <marker id="arr-blue"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/></marker>
+        <marker id="arr-green"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#059669"/></marker>
+        <marker id="arr-red"    viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#dc2626"/></marker>
+        <marker id="arr-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7c3aed"/></marker>
+      </defs></svg>
+      <div id="timeline"></div>
+      <div class="empty" id="timelineEmpty">尚无快照 · 点击左侧「添加快照」开始记录第一个时间态</div>
+    </div>
+  </section>
+
+  <aside class="col-detail card" id="detailPanel">
+    <div class="empty">← 点击时间轴上的快照<br>查看该时间态的完整档案</div>
+  </aside>
+
+</main>
+
+<!-- 新建人物 -->
+<div class="modal-mask" id="personModal" hidden>
+  <div class="modal">
+    <h3>新建人物</h3>
+    <label>名称<input id="personName" placeholder="如：张三"></label>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('personModal')">取消</button>
+      <button class="btn primary" onclick="submitPerson()">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加快照 -->
+<div class="modal-mask" id="snapshotModal" hidden>
+  <div class="modal">
+    <h3>添加快照（时间态）</h3>
+    <label>时间<input type="date" id="snapTs"></label>
+    <label>标签<input id="snapLabel" placeholder="如：20岁的张三"></label>
+    <label>继承自
+      <select id="snapInherits"><option value="">独立根态（不继承）</option></select>
+    </label>
+    <p class="hint">继承态只存与父态的差异（增量），读取时自动沿链合并。</p>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('snapshotModal')">取消</button>
+      <button class="btn primary" onclick="submitSnapshot()">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加链接 -->
+<div class="modal-mask" id="linkModal" hidden>
+  <div class="modal">
+    <h3>添加连贯性链接（属性级）</h3>
+    <div class="form-row">
+      <label class="field">起始快照<select id="linkFrom"></select></label>
+      <label class="field">起始属性
+        <input id="linkFromPath" list="linkFromPaths" placeholder="如 mental.tendency.preferences">
+        <datalist id="linkFromPaths"></datalist>
+      </label>
+    </div>
+    <div class="form-row">
+      <label class="field">目标快照<select id="linkTo"></select></label>
+      <label class="field">目标属性
+        <input id="linkToPath" list="linkToPaths" placeholder="如 mental.tendency.preferences">
+        <datalist id="linkToPaths"></datalist>
+      </label>
+    </div>
+    <label>类型
+      <select id="linkType">
+        <option>继承</option><option>因果</option><option>断裂</option><option>主动重塑</option>
+      </select>
+    </label>
+    <label class="check-row"><input type="checkbox" id="linkAutoInherit" checked>
+      继承/因果链接时同步建立继承关系（目标快照 inherits_from = 起点快照）</label>
+    <label>说明<input id="linkNote" placeholder="这段属性关联的注解（可选）"></label>
+    <p class="hint">链接连接两个快照各自的属性（维度路径）；继承/因果还要求目标快照继承自起点快照，可自动补建。两端属性需已有值（沿继承链可解析）。</p>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('linkModal')">取消</button>
+      <button class="btn primary" onclick="submitLink()">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI 采集 -->
+<div class="modal-mask" id="collectModal" hidden>
+  <div class="modal">
+    <h3>AI 采集</h3>
+    <label>采集引擎
+      <select id="collectEngine">
+        <option value="openai-compatible">OpenAI 兼容模型（混元 / DeepSeek / Ollama 等）</option>
+        <option value="stub">stub（不调用模型，仅验证链路）</option>
+      </select>
+    </label>
+    <label>目标快照（可输入快照 id，如 s_2020）
+      <input id="collectSnap" list="collectSnapList" placeholder="输入快照 id 或从下拉选择">
+      <datalist id="collectSnapList"></datalist>
+    </label>
+    <label>描述（自然语言）<textarea id="collectPrompt" rows="4" placeholder="例如：身高175，体重65，最近偏好简洁务实的风格"></textarea></label>
+    <details class="settings" id="modelSettings">
+      <summary>模型设置（OpenAI 兼容）</summary>
+      <label>Base URL<input id="cfgBase" placeholder="https://api.hunyuan.cloud.tencent.com/v1"></label>
+      <label>API Key<input type="password" id="cfgKey" placeholder="已保存则留空不修改"></label>
+      <label>模型名<input id="cfgModel" placeholder="hunyuan-turbos-latest / deepseek-chat / qwen2.5"></label>
+      <p class="hint">常用端点：混元 https://api.hunyuan.cloud.tencent.com/v1 · DeepSeek https://api.deepseek.com/v1 · Ollama http://127.0.0.1:11434/v1。密钥明文存于本地 data/config.json，勿提交版本库。</p>
+      <div class="modal-foot"><button class="btn" onclick="saveConfig()">保存配置</button></div>
+    </details>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('collectModal')">关闭</button>
+      <button class="btn primary" onclick="submitCollect()">采集并落库</button>
+    </div>
+    <pre class="collect-result" id="collectResult" hidden></pre>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
