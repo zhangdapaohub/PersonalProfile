@@ -5,7 +5,7 @@ import { api } from "./api.js";
 import { openModal, closeModal } from "./util.js";
 import { loadPersons, selectPerson } from "./view.js";
 import { drawLinks } from "./timeline.js";
-import { prefillForm, renderDetail } from "./detail.js";
+import { prefillForm, renderDetail, delNode } from "./detail.js";
 import {
   submitPerson, submitSnapshot, setInherits, submitLink, delLink,
   submitValue, delValue, submitCollect, loadConfig, saveConfig,
@@ -19,7 +19,7 @@ Object.assign(window, {
   openModal, closeModal,
   openSnapshotModal, openLinkModal, openCollectModal,
   submitPerson, submitSnapshot, submitLink, submitValue,
-  delValue, delLink, prefillForm, submitCollect, saveConfig,
+  delValue, delLink, prefillForm, submitCollect, saveConfig, delNode,
   renamePerson, deletePerson, deleteSnapshot, renameSnapshot,
   exportPerson, importPersonFile,
   setBreak, reorderSnapshot,
@@ -47,6 +47,7 @@ window.addEventListener("resize", () => state.tree && drawLinks());
 /* 维度模板名（分组标题用中文名，如 physical → 物理维度） */
 api("/api/schema").then(d => {
   const dims = (d && d.dimensions) || {};
+  state.schema = dims;
   for (const [k, v] of Object.entries(dims)) {
     state.dimNames[k] = (v && v.name) || k;
   }

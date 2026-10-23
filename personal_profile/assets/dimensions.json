@@ -1,17 +1,368 @@
 {
-  "physical": { "name": "物理维度", "children": {
-    "body_shape": { "name": "体型", "children": {
-      "height": { "name": "身高", "unit": "cm" },
-      "weight": { "name": "体重", "unit": "kg" }
-    }}
-  }},
-  "mental": { "name": "精神维度", "children": {
-    "cognitive": { "name": "认知", "children": { "thoughts": { "name": "思想" } }},
-    "tendency": { "name": "倾向", "children": { "preferences": { "name": "偏好" } }}
-  }},
-  "timeline": { "name": "时间线维度", "children": {
-    "life_stage": { "name": "人生阶段" },
-    "role": { "name": "角色" },
-    "milestone": { "name": "里程碑" }
-  }}
+  "physical": {
+    "name": "物理维度",
+    "children": {
+      "body_shape": {
+        "name": "体型",
+        "children": {
+          "height": {
+            "name": "身高",
+            "unit": "cm"
+          },
+          "weight": {
+            "name": "体重",
+            "unit": "kg"
+          }
+        }
+      }
+    }
+  },
+  "mental": {
+    "name": "精神维度",
+    "children": {
+      "cognitive": {
+        "name": "认知",
+        "children": {
+          "thoughts": {
+            "name": "思想"
+          }
+        }
+      },
+      "tendency": {
+        "name": "倾向",
+        "children": {
+          "preferences": {
+            "name": "偏好"
+          }
+        }
+      }
+    }
+  },
+  "timeline": {
+    "name": "时间线维度",
+    "children": {
+      "life_stage": {
+        "name": "人生阶段"
+      },
+      "role": {
+        "name": "角色"
+      },
+      "milestone": {
+        "name": "里程碑"
+      }
+    }
+  },
+  "inbody": {
+    "name": "InBody 体成分",
+    "children": {
+      "report": {
+        "name": "检测信息",
+        "children": {
+          "test_date": {
+            "name": "检测日期"
+          },
+          "test_id": {
+            "name": "检测 ID"
+          }
+        }
+      },
+      "basic": {
+        "name": "基本信息",
+        "children": {
+          "gender": {
+            "name": "性别"
+          },
+          "age": {
+            "name": "年龄",
+            "unit": "岁"
+          },
+          "height": {
+            "name": "身高",
+            "unit": "cm"
+          }
+        }
+      },
+      "score": {
+        "name": "评分",
+        "children": {
+          "inbody": {
+            "name": "InBody 评分",
+            "unit": "分"
+          }
+        }
+      },
+      "composition": {
+        "name": "体成分",
+        "children": {
+          "weight": {
+            "name": "体重",
+            "unit": "kg"
+          },
+          "skeletal_muscle": {
+            "name": "骨骼肌",
+            "unit": "kg"
+          },
+          "body_fat": {
+            "name": "体脂肪量",
+            "unit": "kg"
+          },
+          "total_body_water": {
+            "name": "身体总水分",
+            "unit": "L"
+          },
+          "protein": {
+            "name": "蛋白质",
+            "unit": "kg"
+          },
+          "mineral": {
+            "name": "无机盐",
+            "unit": "kg"
+          },
+          "lean_body_mass": {
+            "name": "去脂体重",
+            "unit": "kg"
+          },
+          "muscle_mass": {
+            "name": "肌肉量",
+            "unit": "kg"
+          }
+        }
+      },
+      "obesity": {
+        "name": "肥胖分析",
+        "children": {
+          "bmi": {
+            "name": "BMI 身体质量指数",
+            "unit": "kg/m²"
+          },
+          "pbf": {
+            "name": "体脂百分比 PBF",
+            "unit": "%"
+          },
+          "visceral_fat_level": {
+            "name": "内脏脂肪等级",
+            "unit": "级"
+          },
+          "visceral_fat_area": {
+            "name": "内脏脂肪面积 VFA",
+            "unit": "cm²"
+          },
+          "whr": {
+            "name": "腰臀比 WHR"
+          }
+        }
+      },
+      "control": {
+        "name": "体重控制建议",
+        "children": {
+          "target_weight": {
+            "name": "目标体重",
+            "unit": "kg"
+          },
+          "weight_change": {
+            "name": "体重控制",
+            "unit": "kg"
+          },
+          "fat_change": {
+            "name": "脂肪控制（减脂）",
+            "unit": "kg"
+          },
+          "muscle_change": {
+            "name": "肌肉控制（增肌）",
+            "unit": "kg"
+          }
+        }
+      },
+      "segments": {
+        "name": "节段分布",
+        "children": {
+          "muscle": {
+            "name": "节段肌肉量",
+            "children": {
+              "right_arm": {
+                "name": "右上肢",
+                "children": {
+                  "mass": {
+                    "name": "肌肉量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "left_arm": {
+                "name": "左上肢",
+                "children": {
+                  "mass": {
+                    "name": "肌肉量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "trunk": {
+                "name": "躯干",
+                "children": {
+                  "mass": {
+                    "name": "肌肉量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "right_leg": {
+                "name": "右下肢",
+                "children": {
+                  "mass": {
+                    "name": "肌肉量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "left_leg": {
+                "name": "左下肢",
+                "children": {
+                  "mass": {
+                    "name": "肌肉量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              }
+            }
+          },
+          "fat": {
+            "name": "节段脂肪量",
+            "children": {
+              "right_arm": {
+                "name": "右上肢",
+                "children": {
+                  "mass": {
+                    "name": "脂肪量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "left_arm": {
+                "name": "左上肢",
+                "children": {
+                  "mass": {
+                    "name": "脂肪量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "trunk": {
+                "name": "躯干",
+                "children": {
+                  "mass": {
+                    "name": "脂肪量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "right_leg": {
+                "name": "右下肢",
+                "children": {
+                  "mass": {
+                    "name": "脂肪量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              },
+              "left_leg": {
+                "name": "左下肢",
+                "children": {
+                  "mass": {
+                    "name": "脂肪量",
+                    "unit": "kg"
+                  },
+                  "percent": {
+                    "name": "占比",
+                    "unit": "%"
+                  }
+                }
+              }
+            }
+          },
+          "muscle_balance": {
+            "name": "肌肉均衡评估"
+          },
+          "fat_balance": {
+            "name": "脂肪分布评估"
+          }
+        }
+      },
+      "other": {
+        "name": "其他指标",
+        "children": {
+          "ecw_ratio": {
+            "name": "细胞外水分比率 ECW"
+          },
+          "bmr": {
+            "name": "基础代谢率 BMR",
+            "unit": "kcal"
+          },
+          "bone_mineral": {
+            "name": "骨矿物质含量",
+            "unit": "kg"
+          },
+          "body_cell_mass": {
+            "name": "身体细胞量",
+            "unit": "kg"
+          },
+          "ffmi": {
+            "name": "去脂体重指数 FFMI",
+            "unit": "kg/m²"
+          },
+          "smi": {
+            "name": "骨骼肌质量指数 SMI",
+            "unit": "kg/m²"
+          }
+        }
+      },
+      "assessment": {
+        "name": "综合评估",
+        "children": {
+          "edema": {
+            "name": "水肿评估"
+          },
+          "summary": {
+            "name": "综合结论"
+          }
+        }
+      }
+    }
+  }
 }

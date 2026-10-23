@@ -17,6 +17,7 @@ API 一览：
   GET    /api/value?person=&snapshot=&path=       取值（沿链合并）
   POST   /api/value                               写值 {person, snapshot, path, value, unit?, name?}
   DELETE /api/value                               删本态覆盖 {person, snapshot, path}
+  DELETE /api/node                                删整节点 {person, snapshot, prefix}（prefix 及全部子路径的本态覆盖）
   POST   /api/links                               新增链接 {person, from, to, type, note?, auto_inherit?}
   DELETE /api/links                               删链接 {person, link_id}
   POST   /api/collect                             AI 采集 {person, snapshot, prompt, collector?}
@@ -328,6 +329,11 @@ class Handler(BaseHTTPRequestHandler):
                     archive.del_value(b["person"], b["snapshot"], b["path"])
                     archive.save()
                 return self._ok()
+            if u.path == "/api/node":
+                with _LOCK:
+                    removed = archive.del_subtree(b["person"], b["snapshot"], b["prefix"])
+                    archive.save()
+                return self._ok({"removed": len(removed), "paths": sorted(removed)})
             if u.path == "/api/links":
                 with _LOCK:
                     archive.rm_link(b["person"], b["link_id"])

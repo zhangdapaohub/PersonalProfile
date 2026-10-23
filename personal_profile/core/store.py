@@ -541,6 +541,20 @@ class Archive:
             raise ArchiveError(f"本态 overrides 中不存在该 path: {path}")
         return snap["overrides"].pop(path)
 
+    def del_subtree(self, person_id: str, snapshot_id: str, prefix: str) -> dict:
+        """删除一个「节点」：prefix 自身及其全部子路径的本态覆盖（继承项不删）。
+
+        用于详情树整组删除，如 prefix=inbody.segments 一次性删掉该子树所有本态值。
+        返回 {removed: {path: leaf}}；无任何匹配时抛 ArchiveError。
+        """
+        _validate_path(prefix)
+        snap = self._snapshot(person_id, snapshot_id)
+        targets = [p for p in snap["overrides"]
+                   if p == prefix or p.startswith(prefix + ".")]
+        if not targets:
+            raise ArchiveError(f"该节点下没有可删除的本态覆盖: {prefix}")
+        return {p: snap["overrides"].pop(p) for p in targets}
+
     def set_break(self, person_id: str, snapshot_id: str, path: str, on: bool) -> dict:
         """属性级「断裂」（中断继承）开关。断裂标记记录在当前快照上。
 

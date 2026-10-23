@@ -155,6 +155,14 @@ def cmd_del_value(a, args):
             "note": "本态覆盖已删；父态值（若有）重新生效"}
 
 
+def cmd_del_node(a, args):
+    removed = a.del_subtree(args.person, args.snapshot, args.prefix)
+    a.save()
+    return {"kind": "deleted", "person": args.person, "snapshot": args.snapshot,
+            "prefix": args.prefix, "count": len(removed), "paths": sorted(removed),
+            "note": "整节点删除完成（仅本态覆盖；继承项不受影响）"}
+
+
 def cmd_break(a, args):
     snap = a.set_break(args.person, args.snapshot, args.path, not args.off)
     a.save()
@@ -317,6 +325,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--snapshot", required=True)
     p.add_argument("--path", required=True)
 
+    p = _p("del-node", "删整节点：prefix 自身及全部子路径的本态覆盖（继承项不删）", cmd_del_node)
+    p.add_argument("--person", required=True, help="identity_id")
+    p.add_argument("--snapshot", required=True, help="快照 id")
+    p.add_argument("--prefix", required=True, help="节点路径前缀，如 inbody.segments")
+
     p = _p("break", "属性级断裂：在本态标记某属性不再继承（--off 取消，恢复继承）", cmd_break)
     p.add_argument("--person", required=True, help="identity_id")
     p.add_argument("--snapshot", required=True, help="快照 id")
@@ -384,6 +397,8 @@ def render_text(payload: dict) -> str:
     if kind == "value":
         return f"{payload['path']} = {_fmt_leaf(payload['leaf'])}"
     if kind == "deleted":
+        if "prefix" in payload:  # del-node：整节点删除
+            return f"已删除节点 {payload['prefix']}（{payload['count']} 项本态覆盖）；{payload['note']}"
         return f"已删除 {payload['path']}（原值: {payload['removed']['value']}）；{payload['note']}"
     if kind == "inherits":
         return f"{payload['snapshot']} 的继承关系: {payload['inherits_from'] or '独立根态'}（{payload['note']}）"

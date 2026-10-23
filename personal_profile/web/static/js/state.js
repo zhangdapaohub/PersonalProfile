@@ -5,7 +5,8 @@ export const state = {
   current: null,   // 当前人物 identity_id
   tree: null,      // 当前人物时间轴视图
   selected: null,  // 当前选中快照 id
-  dimNames: {},    // 维度模板：key → 中文名
+  dimNames: {},    // 维度模板：顶层 key → 中文名
+  schema: {},      // 维度模板全量树：{key: {name, children:{...}}}，供详情树/链接联想解析各层中文名
   lastTrace: null, // 最近一次详情 trace，供"改"按钮预填
 };
 
