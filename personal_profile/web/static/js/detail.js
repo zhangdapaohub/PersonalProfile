@@ -54,6 +54,11 @@ function buildTree(trace, order) {
 const countLeaves = n =>
   n.leaves.length + [...n.children.values()].reduce((s, c) => s + countLeaves(c), 0);
 
+/* 子树内本态覆盖的叶子数：为 0 说明整个节点全是继承值，不该出现删除节点按钮 */
+const countOwn = (n, sid) =>
+  n.leaves.filter(([, it]) => it.source === sid).length +
+  [...n.children.values()].reduce((s, c) => s + countOwn(c, sid), 0);
+
 /* ---------- 行渲染 ---------- */
 
 function leafRow(path, item, sid) {
@@ -78,10 +83,11 @@ function renderGroup(node, sid) {
   const t = tmplAt(node.segs);
   const name = (t && t.name) || node.segs[node.segs.length - 1];
   const prefix = node.segs.join(".");
+  const ownLeaves = countOwn(node, sid);
   return `<details open class="tree-group">
     <summary class="tree-title">${esc(name)} <span class="tree-cnt">${countLeaves(node)}</span>
-      <button class="btn mini danger node-del" title="删除整个节点（该子树全部本态覆盖；继承项不删）"
-        onclick="event.preventDefault(); event.stopPropagation(); delNode('${esc(prefix)}')">🗑</button>
+      ${ownLeaves ? `<button class="btn mini danger node-del" title="删除整个节点（该子树全部本态覆盖；继承项不删）"
+        onclick="event.preventDefault(); event.stopPropagation(); delNode('${esc(prefix)}')">🗑</button>` : ""}
     </summary>
     <div class="tree-body">
       ${[...node.children.values()].map(c => renderGroup(c, sid)).join("")}
