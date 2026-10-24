@@ -1,0 +1,506 @@
+{
+  "version": "0.1.0-p0",
+  "label": "P0 核心画像",
+  "note": "提问库 P0：每指标一题。指标的 path/中文名/单位为本文件唯一权威定义（指标注册表），展示层经 /api/schema 合并后引用。maps_to 即指标 path。",
+  "domains": [
+    {
+      "key": "identity",
+      "name": "身份与存在",
+      "dimensions": [
+        {
+          "key": "basic",
+          "name": "基本信息",
+          "metrics": [
+            { "path": "identity.basic.full_name", "name": "姓名", "type": "fact", "input": "text", "volatile": false,
+              "q": { "text": "你的姓名？曾用名、昵称、常用网名也可一并列出。", "probe": [] } },
+            { "path": "identity.basic.birth_date", "name": "出生日期", "type": "fact", "input": "date", "volatile": false,
+              "q": { "text": "你的出生日期？（农历/阳历可注明）", "probe": [] } },
+            { "path": "identity.basic.birthplace", "name": "出生地", "type": "fact", "input": "text", "volatile": false,
+              "q": { "text": "你出生在哪里？（省市/医院/家里均可）", "probe": [] } },
+            { "path": "identity.basic.current_city", "name": "现居城市", "type": "fact", "input": "text", "volatile": true,
+              "q": { "text": "你现在定居在哪个城市？住了多久？", "probe": ["之前在哪些城市长期生活过？"] } }
+          ]
+        },
+        {
+          "key": "origin",
+          "name": "出身溯源",
+          "metrics": [
+            { "path": "identity.origin.name_story", "name": "名字由来", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你的名字是谁起的？有什么含义或故事？", "probe": ["你喜欢自己的名字吗？"] } },
+            { "path": "identity.legal.marital_status", "name": "婚姻状况", "type": "fact", "input": "select",
+              "options": ["未婚", "恋爱中", "已婚", "离异", "丧偶"], "volatile": true,
+              "q": { "text": "你目前的婚姻/感情状况？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "tags",
+          "name": "一句话身份",
+          "metrics": [
+            { "path": "identity.tags.self_intro", "name": "一句话自我介绍", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "如果只能用一句话介绍自己，你会怎么说？", "probe": [] } },
+            { "path": "identity.tags.three_words", "name": "三个标签词", "type": "fact", "input": "text", "volatile": false,
+              "q": { "text": "用三个词概括你自己（逗号分隔）。", "probe": [] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "body",
+      "name": "身体",
+      "dimensions": [
+        {
+          "key": "appearance",
+          "name": "外貌体征",
+          "metrics": [
+            { "path": "body.appearance.height", "name": "身高", "type": "fact", "input": "number", "unit": "cm", "volatile": false,
+              "q": { "text": "你的身高？", "probe": [] } },
+            { "path": "body.appearance.weight", "name": "体重", "type": "fact", "input": "number", "unit": "kg", "volatile": true,
+              "q": { "text": "你目前的体重？（自报值，体检实测走 InBody 导入）", "probe": [] } },
+            { "path": "body.appearance.self_rating", "name": "体型自评", "type": "eval", "input": "rating", "volatile": false,
+              "q": { "text": "给自己现在的体型打分（1=很不满意，5=很满意）。", "probe": ["最想改变哪一点？"] } }
+          ]
+        },
+        {
+          "key": "health",
+          "name": "健康",
+          "metrics": [
+            { "path": "body.health.chronic_allergy", "name": "慢性病与过敏", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "有哪些慢性病、过敏源或长期在用的药？（没有写\"无\"）", "probe": [] } },
+            { "path": "body.health.family_history", "name": "家族病史", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "直系亲属有哪些值得注意的病史？（没有写\"无\"）", "probe": [] } }
+          ]
+        },
+        {
+          "key": "sleep",
+          "name": "睡眠",
+          "metrics": [
+            { "path": "body.sleep.bedtime", "name": "通常入睡时间", "type": "fact", "input": "text", "volatile": true,
+              "q": { "text": "工作日你通常几点睡、几点起？", "probe": ["周末会差多少？"] } },
+            { "path": "body.sleep.quality", "name": "睡眠质量自评", "type": "eval", "input": "rating", "volatile": true,
+              "q": { "text": "给自己的睡眠质量打分（1=很差，5=很好）。", "probe": ["入睡难还是易醒？"] } }
+          ]
+        },
+        {
+          "key": "energy",
+          "name": "精力",
+          "metrics": [
+            { "path": "body.energy.peak_hours", "name": "精力最佳时段", "type": "fact", "input": "select",
+              "options": ["清晨", "上午", "下午", "傍晚", "深夜"], "volatile": false,
+              "q": { "text": "一天中你状态最好的时段是？", "probe": ["起来后多久才算真正\"清醒\"？"] } },
+            { "path": "body.energy.recovery", "name": "恢复方式", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "累了之后，你最有效的恢复方式是什么？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "medical",
+          "name": "医疗检测",
+          "metrics": [
+            { "path": "body.medical.last_checkup_flags", "name": "最近体检异常项", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "最近一次体检有哪些异常或复查项？（报告可后补作佐证）", "probe": ["有安排复查吗？"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mind",
+      "name": "心理与内在",
+      "dimensions": [
+        {
+          "key": "personality",
+          "name": "性格",
+          "metrics": [
+            { "path": "mind.personality.self_words", "name": "性格自述三词", "type": "fact", "input": "text", "volatile": false,
+              "q": { "text": "用三个词形容你的性格（逗号分隔）。", "probe": [] } },
+            { "path": "mind.personality.strengths", "name": "最大优点", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你最大的优点是什么？举一件能证明它的事。", "probe": [] } },
+            { "path": "mind.personality.weaknesses", "name": "最大缺点", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你最大的缺点是什么？它给你造成过的最大麻烦是？", "probe": ["想过怎么改吗？"] } },
+            { "path": "mind.personality.other_view", "name": "他评反差", "type": "eval", "input": "textarea", "perspective": "other", "volatile": false,
+              "q": { "text": "最了解你的人会用哪三个词形容你？和你自述的差在哪？", "probe": ["你希望他们用的是哪三个？"] } }
+          ]
+        },
+        {
+          "key": "values",
+          "name": "价值观",
+          "metrics": [
+            { "path": "mind.values.money", "name": "金钱观", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "钱对你意味着什么？赚够多少你会换一种活法？", "probe": [] } },
+            { "path": "mind.values.bottom_line", "name": "是非底线", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "有什么事给再多钱你也不做？", "probe": [] } },
+            { "path": "mind.values.admire", "name": "最敬佩的人", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你最敬佩谁？为什么？（认识的人或公众人物均可）", "probe": [] } }
+          ]
+        },
+        {
+          "key": "emotion",
+          "name": "情绪",
+          "metrics": [
+            { "path": "mind.emotion.anger_pattern", "name": "生气时的样子", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你生气时外人看得出来吗？典型表现是什么？", "probe": ["最近一次真的动怒是因为什么？"] } },
+            { "path": "mind.emotion.stress_pattern", "name": "压力反应", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "压力大到快扛不住时，你的身体和行为会有什么反应？", "probe": ["你用什么方法把自己拉回来？"] } }
+          ]
+        },
+        {
+          "key": "desire",
+          "name": "欲望与恐惧",
+          "metrics": [
+            { "path": "mind.desire.top_desires", "name": "最渴望的三件事", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "现阶段你最渴望得到/实现的三件事？", "probe": [] } },
+            { "path": "mind.desire.fears", "name": "最深的恐惧", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你最深的恐惧是什么？它最早出现在什么时候？", "probe": ["它影响过你的哪个重大决定？"] } }
+          ]
+        },
+        {
+          "key": "belief",
+          "name": "信念",
+          "metrics": [
+            { "path": "mind.belief.life_motto", "name": "人生信条", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "有没有一句话支撑你很多年？它从哪来的？", "probe": [] } },
+            { "path": "mind.belief.worldview", "name": "世界观", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你更相信人性本善还是本恶？世界是公平的吗？", "probe": ["什么事让你变成这样？"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "capability",
+      "name": "能力与知识",
+      "dimensions": [
+        {
+          "key": "skills",
+          "name": "技能",
+          "metrics": [
+            { "path": "capability.skills.hard", "name": "硬技能清单", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "列出你能拿出去换钱的技能，各打几分（1-5）？有证书/作品佐证吗？", "probe": [] } },
+            { "path": "capability.skills.languages", "name": "语言能力", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "会哪些语言/方言？各到什么程度（日常/工作/母语级）？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "education",
+          "name": "教育经历",
+          "metrics": [
+            { "path": "capability.education.timeline", "name": "教育时间线", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "从中学起的教育经历（学校/年份/学历）？", "probe": [] } },
+            { "path": "capability.education.major_reason", "name": "专业选择原因", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "当初为什么选这个专业？现在后悔吗？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "knowledge",
+          "name": "知识结构",
+          "metrics": [
+            { "path": "capability.knowledge.expertise", "name": "能讲半小时的话题", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "哪些话题你能不备课讲半小时？（专业或业余均可）", "probe": [] } }
+          ]
+        },
+        {
+          "key": "expression",
+          "name": "表达",
+          "metrics": [
+            { "path": "capability.expression.style", "name": "说话风格", "type": "fact", "input": "select",
+              "options": ["直接了当", "委婉含蓄", "看人下菜", "话多爱聊", "惜字如金"], "volatile": false,
+              "q": { "text": "你的说话风格更接近哪种？有口头禅吗？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "habits",
+          "name": "习惯",
+          "metrics": [
+            { "path": "capability.habits.routine", "name": "每日例行", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "你雷打不动的日常惯例有哪些？（哪怕很小）", "probe": [] } },
+            { "path": "capability.habits.procrastination", "name": "拖延模式", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你拖什么事情最严重？拖到什么程度才动手？", "probe": [] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "relations",
+      "name": "关系网络",
+      "dimensions": [
+        {
+          "key": "family",
+          "name": "家庭",
+          "metrics": [
+            { "path": "relations.family.father", "name": "父亲画像", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "用三个词形容你父亲？哪件事最能代表他？", "probe": ["你们多久联系一次？"] } },
+            { "path": "relations.family.mother", "name": "母亲画像", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "用三个词形容你母亲？哪件事最能代表她？", "probe": ["你们多久联系一次？"] } },
+            { "path": "relations.family.siblings", "name": "兄弟姐妹", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "有兄弟姐妹吗？关系如何？（独生子写\"独生子\"）", "probe": [] } },
+            { "path": "relations.family.partner", "name": "伴侣", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "有伴侣吗？一句话描述TA，以及你们怎么认识的。", "probe": [] } }
+          ]
+        },
+        {
+          "key": "social",
+          "name": "社交",
+          "metrics": [
+            { "path": "relations.social.best_friends", "name": "挚友名单", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "列出你能半夜打电话的挚友（称呼+相识原因）。", "probe": [] } },
+            { "path": "relations.social.style", "name": "社交风格自评", "type": "eval", "input": "rating", "volatile": false,
+              "q": { "text": "聚会后你需要独处回血吗？（1=越多人越嗨，5=必须独处回血）", "probe": [] } }
+          ]
+        },
+        {
+          "key": "org",
+          "name": "组织",
+          "metrics": [
+            { "path": "relations.org.company_role", "name": "公司与职务", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "现在的公司、团队、职务与主要职责？", "probe": [] } },
+            { "path": "relations.org.team_role", "name": "团队角色自评", "type": "eval", "input": "select",
+              "options": ["领路/拍板", "执行主力", "军师/出主意", "润滑/协调", "独行侠"], "volatile": false,
+              "q": { "text": "在团队里你通常扮演什么角色？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "pets",
+          "name": "宠物",
+          "metrics": [
+            { "path": "relations.pets.pets", "name": "宠物", "type": "fact", "input": "text", "volatile": true,
+              "q": { "text": "有宠物吗？名字和来历？", "probe": [] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "experiences",
+      "name": "经历与时间",
+      "dimensions": [
+        {
+          "key": "timeline",
+          "name": "大事记",
+          "metrics": [
+            { "path": "experiences.timeline.major_events", "name": "人生大事记", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "列出改变你人生走向的 3-5 件事（年份+一句话）。", "probe": ["每件事之后你变成了什么样？"] } }
+          ]
+        },
+        {
+          "key": "stages",
+          "name": "阶段画像",
+          "metrics": [
+            { "path": "experiences.stages.childhood", "name": "童年画像", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "用两三句话画一下你的童年：在哪长大、和谁、最深的记忆？", "probe": [] } },
+            { "path": "experiences.stages.school", "name": "求学阶段", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "学生时代的你是什么样的人？（成绩、圈子、在乎什么）", "probe": [] } },
+            { "path": "experiences.stages.career", "name": "职业阶段", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "工作至今的关键节点（换过几份工作、为何变动）？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "peaks",
+          "name": "高光与遗憾",
+          "metrics": [
+            { "path": "experiences.peaks.proudest", "name": "最自豪的事", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "到现在为止最让你自豪的一件事？", "probe": [] } },
+            { "path": "experiences.peaks.regrets", "name": "最后悔的事", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "最让你后悔的一件事？如果重来你会怎么做？", "probe": [] } },
+            { "path": "experiences.peaks.turning_point", "name": "人生转折点", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "哪件事之后你\"变了个人\"？变前变后各什么样？", "probe": ["这个转折适合标记成档案里的\"断裂\"或\"主动重塑\"吗？"] } }
+          ]
+        },
+        {
+          "key": "relocations",
+          "name": "生活变迁",
+          "metrics": [
+            { "path": "experiences.relocations.places", "name": "住过的地方", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "按时间列出你长期住过的城市/片区。", "probe": [] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "possessions",
+      "name": "拥有物",
+      "dimensions": [
+        {
+          "key": "assets",
+          "name": "资产",
+          "metrics": [
+            { "path": "possessions.assets.housing", "name": "房产", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "房产情况？（几套/城市/自有或家庭共有，不便细说可写概况）", "probe": [] } },
+            { "path": "possessions.assets.vehicle", "name": "车辆", "type": "fact", "input": "text", "volatile": true,
+              "q": { "text": "有车吗？什么车？（没有写\"无\"）", "probe": [] } },
+            { "path": "possessions.assets.investment", "name": "存款投资概况", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "存款/投资的大致结构与风格（比例即可，不必金额）。", "probe": [] } },
+            { "path": "possessions.assets.debts", "name": "负债", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "负债情况（房贷/借款，概况即可）？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "items",
+          "name": "物品",
+          "metrics": [
+            { "path": "possessions.items.treasure", "name": "最有感情的物品", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "如果家里只能抢救一件东西，你拿什么？它的来历？", "probe": [] } },
+            { "path": "possessions.items.collections", "name": "收藏", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "有什么长期收集/囤积的东西？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "digital",
+          "name": "数字资产",
+          "metrics": [
+            { "path": "possessions.digital.platforms", "name": "常用平台与账号", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "最常用的平台/APP 和你在上面的身份（创作账号也算）。", "probe": [] } }
+          ]
+        },
+        {
+          "key": "ip",
+          "name": "作品与权利",
+          "metrics": [
+            { "path": "possessions.ip.works", "name": "作品与署名", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "有没有署名的作品/专利/项目？（代码、文章、设计都算）", "probe": [] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "lifestyle",
+      "name": "生活方式",
+      "dimensions": [
+        {
+          "key": "diet",
+          "name": "饮食",
+          "metrics": [
+            { "path": "lifestyle.diet.taste", "name": "口味与忌口", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "口味偏好（辣/甜/清淡…）和忌口？", "probe": [] } },
+            { "path": "lifestyle.diet.takeout_ratio", "name": "外卖做饭比例", "type": "fact", "input": "select",
+              "options": ["几乎全做饭", "做饭为主", "一半一半", "外卖为主", "几乎全外卖"], "volatile": true,
+              "q": { "text": "一日三餐，外卖和做饭的比例大概？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "clothing",
+          "name": "穿着",
+          "metrics": [
+            { "path": "lifestyle.clothing.style", "name": "穿搭风格", "type": "fact", "input": "text", "volatile": false,
+              "q": { "text": "你的穿衣风格一句话？最常穿的品牌/类型？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "housing",
+          "name": "居住",
+          "metrics": [
+            { "path": "lifestyle.housing.tidiness", "name": "整洁度自评", "type": "eval", "input": "rating", "volatile": false,
+              "q": { "text": "给自己住处的整洁度打分（1=很乱，5=一尘不染）。", "probe": [] } }
+          ]
+        },
+        {
+          "key": "transport",
+          "name": "出行",
+          "metrics": [
+            { "path": "lifestyle.transport.commute", "name": "通勤方式", "type": "fact", "input": "text", "volatile": true,
+              "q": { "text": "日常通勤方式与时长？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "entertainment",
+          "name": "娱乐",
+          "metrics": [
+            { "path": "lifestyle.entertainment.sports", "name": "运动", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "运动频率和常做的项目？", "probe": [] } },
+            { "path": "lifestyle.entertainment.hobbies", "name": "兴趣爱好", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "兴趣爱好清单（+投入度：随便玩玩/每周固定/重度投入）？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "spending",
+          "name": "消费",
+          "metrics": [
+            { "path": "lifestyle.spending.monthly_profile", "name": "月支出概况", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "月支出的大头三项？容易在哪冲动消费？", "probe": [] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "attention",
+      "name": "时间与注意力",
+      "dimensions": [
+        {
+          "key": "time",
+          "name": "时间分配",
+          "metrics": [
+            { "path": "attention.time.weekday_profile", "name": "工作日时间画像", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "描述你典型的一个工作日（几点到几点都在干嘛）。", "probe": [] } },
+            { "path": "attention.time.blackhole", "name": "时间黑洞", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "上周的时间哪一段你最想快进？为什么？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "information",
+          "name": "信息源",
+          "metrics": [
+            { "path": "attention.information.sources", "name": "常看的信息源", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "日常从哪获取信息（媒体/博主/播客/社群）？", "probe": [] } },
+            { "path": "attention.information.blocked", "name": "主动屏蔽的信息", "type": "fact", "input": "textarea", "volatile": false,
+              "q": { "text": "你主动屏蔽/远离哪类信息？为什么？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "focus",
+          "name": "当前关注",
+          "metrics": [
+            { "path": "attention.focus.researching", "name": "最近在研究什么", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "最近正在研究/折腾什么？到什么程度了？", "probe": [] } },
+            { "path": "attention.focus.reading", "name": "正在读的书", "type": "fact", "input": "text", "volatile": true,
+              "q": { "text": "现在在读的书/追的内容？", "probe": [] } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "future",
+      "name": "意向与未来",
+      "dimensions": [
+        {
+          "key": "goals",
+          "name": "目标",
+          "metrics": [
+            { "path": "future.goals.one_year", "name": "一年目标", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "未来一年你最想完成的一件事？", "probe": [] } },
+            { "path": "future.goals.three_year", "name": "三年目标", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "三年后的你是什么样？（工作/生活/状态）", "probe": [] } },
+            { "path": "future.goals.ten_year", "name": "十年愿景", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "十年后你希望自己在过什么样的生活？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "plans",
+          "name": "计划",
+          "metrics": [
+            { "path": "future.plans.life_nodes", "name": "人生节点计划", "type": "fact", "input": "textarea", "volatile": true,
+              "q": { "text": "买房/结婚/生育/换城市等人生节点，你有过哪些计划或时间表？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "worries",
+          "name": "担忧",
+          "metrics": [
+            { "path": "future.worries.top", "name": "最大担忧", "type": "story", "input": "textarea", "volatile": true,
+              "q": { "text": "对未来最大的担忧是什么？（健康/财务/家庭/职业）", "probe": ["有在做对冲准备吗？"] } }
+          ]
+        },
+        {
+          "key": "bottom",
+          "name": "底线",
+          "metrics": [
+            { "path": "future.bottom.never_give_up", "name": "绝不放弃的东西", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "无论境况多差，你都不会放弃的东西是什么？", "probe": [] } }
+          ]
+        },
+        {
+          "key": "legacy",
+          "name": "终局",
+          "metrics": [
+            { "path": "future.legacy.memory", "name": "想被记住成什么样", "type": "story", "input": "textarea", "volatile": false,
+              "q": { "text": "你希望别人记住你什么？给十年后的自己写一句话。", "probe": [] } }
+          ]
+        }
+      ]
+    }
+  ]
+}

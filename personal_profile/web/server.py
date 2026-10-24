@@ -23,7 +23,9 @@ API 一览：
   POST   /api/collect                             AI 采集 {person, snapshot, prompt, collector?}
   GET    /api/config                              模型配置（掩码）
   POST   /api/config                              保存模型配置 {base_url, api_key?, model}
-  GET    /api/schema                              维度模板
+  GET    /api/schema                              维度模板（已合并提问库指标注册表）
+  GET    /qbank                                   提问库独立页面（问答采集）
+  *      /api/qbank/*                             提问库 API（独立模块，见 web/qbank_api.py）
 """
 
 from __future__ import annotations
@@ -44,6 +46,9 @@ from personal_profile.core import config as pp_config  # noqa: E402
 from personal_profile.core.logutil import get_logger  # noqa: E402
 from personal_profile.core.store import INHERIT_REQUIRED_LINKS, Archive, ArchiveError  # noqa: E402
 from personal_profile.paths import DATA_PATH, SCHEMA_PATH  # noqa: E402
+
+from personal_profile.web import qbank_api as qbank_route  # noqa: E402  提问库独立路由
+from personal_profile.core import qbank as qbank_core  # noqa: E402
 
 log = get_logger("web")  # 运行日志：logs/web.log（自动轮转）+ 控制台
 
@@ -125,6 +130,8 @@ class Handler(BaseHTTPRequestHandler):
     def _static(self, path: str) -> None:
         if path in ("/", ""):
             file_path = os.path.join(_TPL_DIR, "index.html")
+        elif path == "/qbank":
+            file_path = os.path.join(_TPL_DIR, "qbank.html")  # 提问库独立页面
         elif path.startswith("/static/"):
             file_path = os.path.normpath(os.path.join(_STATIC_DIR, path[len("/static/"):]))
         else:
@@ -177,7 +184,15 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/config":
                 return self._ok(pp_config.masked(pp_config.load_config()))
             if u.path == "/api/schema":
-                return self._ok({"kind": "schema", "dimensions": SCHEMA})
+                # 指标注册表合并：dimensions.json 为基，追加提问库自有的指标分组（不覆盖同名）
+                merged = dict(SCHEMA)
+                for k, v in qbank_core.to_registry().items():
+                    merged.setdefault(k, v)
+                return self._ok({"kind": "schema", "dimensions": merged})
+            # 提问库独立路由（/api/qbank/*）
+            _qb = qbank_route.route(archive, "GET", u.path, u.query, None)
+            if _qb is not None:
+                return self._json(*_qb)
             return self._fail(404, "unknown api")
         except ArchiveError as e:
             return self._fail(400, str(e))
@@ -297,6 +312,10 @@ class Handler(BaseHTTPRequestHandler):
                     "model": b.get("model", old["model"]),
                 })
                 return self._ok({"saved": True, **pp_config.masked(saved)})
+            # 提问库独立路由（/api/qbank/*）
+            _qb = qbank_route.route(archive, "POST", u.path, u.query, b)
+            if _qb is not None:
+                return self._json(*_qb)
             return self._fail(404, "unknown api")
         except ArchiveError as e:
             return self._fail(400, str(e))

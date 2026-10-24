@@ -16,3 +16,6 @@ LOG_DIR = os.environ.get("PP_LOG_DIR") or os.path.join(ROOT, "logs")
 
 # 维度模板（随包分发）
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "dimensions.json")
+
+# 提问库（随包分发；独立模块，仅 core/qbank.py 与其 API 消费）
+QBANK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "question_bank.json")

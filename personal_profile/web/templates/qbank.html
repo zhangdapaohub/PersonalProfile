@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>提问库 · 问答采集</title>
+  <link rel="stylesheet" href="/static/css/qbank.css">
+</head>
+<body>
+  <header class="qb-top">
+    <div class="qb-brand">
+      <span class="qb-logo">◈</span>
+      <div>
+        <h1>提问库 · 问答采集</h1>
+        <p class="qb-sub" id="qbMeta">加载中…</p>
+      </div>
+    </div>
+    <div class="qb-target">
+      <label>人物 <select id="qbPerson"></select></label>
+      <label>时间态 <select id="qbSnapshot"></select></label>
+      <a class="qb-back" href="/">← 返回档案</a>
+    </div>
+  </header>
+
+  <div class="qb-progress">
+    <div class="qb-progress-bar"><div class="qb-progress-fill" id="qbProgressFill"></div></div>
+    <span class="qb-progress-text" id="qbProgressText">0 / 0</span>
+  </div>
+
+  <main class="qb-main">
+    <aside class="qb-side" id="qbDomains"><!-- 领域进度列表 --></aside>
+
+    <section class="qb-card" id="qbCard">
+      <div class="qb-crumb" id="qbCrumb"></div>
+      <div class="qb-question" id="qbQuestion"></div>
+      <div class="qb-hints" id="qbHints"></div>
+      <div class="qb-input" id="qbInputArea"></div>
+      <div class="qb-current" id="qbCurrent"></div>
+      <div class="qb-ops">
+        <button class="qb-btn" id="qbPrev">← 上一题</button>
+        <button class="qb-btn ghost" id="qbSkip">跳过</button>
+        <button class="qb-btn ghost danger" id="qbClear" hidden>清除本态答案</button>
+        <span class="qb-flex"></span>
+        <button class="qb-btn primary" id="qbSubmit">提交 →</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="qb-toast" id="qbToast" hidden></div>
+  <script type="module" src="/static/js/qbank.js"></script>
+</body>
+</html>
