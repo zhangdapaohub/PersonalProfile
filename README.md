@@ -64,13 +64,18 @@ AI 默认拿「最新 resolved 态」；问「过去的你」时经 `pp_timeline
 python -m personal_profile.web.server          # Web 端
 python -m personal_profile.mcp                 # MCP stdio server（宿主拉起，勿手动常驻）
 
-# ② CLI 全流程
+# ② 不想从零建数据？一键载入完全虚构的演示人物「陈亦航」（92 项值 / 3 快照 / 断裂+三类链接 / InBody）：
+PP_DATA=docs/demo-archive.json python -m personal_profile.web.server
+#    Windows PowerShell：$env:PP_DATA="docs/demo-archive.json"; python -m personal_profile.web.server
+
+# ③ CLI 全流程
 python -m personal_profile add-person --name 张三
 python -m personal_profile add-snapshot --person p_xxx --timestamp 2020-01-01 --label "20岁的张三"
 python -m personal_profile set --person p_xxx --snapshot s_xxx --path physical.body_shape.height --value 175 --unit cm
 python -m personal_profile tree --person p_xxx --pretty
 ```
 - 数据：`data/archive.json`（自动创建；`PP_DATA` / `PP_PORT` 环境变量可覆盖）。
+- 演示数据：`docs/demo-archive.json`（全虚构，不含任何真人信息），同时是数据模型全特性的参考样例。
 
 ## 架构与工程化
 
