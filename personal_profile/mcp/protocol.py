@@ -26,11 +26,22 @@ INTERNAL_ERROR = -32603
 
 def read_message(fp: TextIO) -> Optional[dict]:
     """读一条消息。返回 None 表示流结束（EOF）；
-    解析失败返回 {"__parse_error__": 原始行} 交由上层回 -32700。"""
-    line = fp.readline()
-    if not line:  # EOF
-        return None
-    line = line.strip()
+    解析失败返回 {"__parse_error__": 原始行} 交由上层回 -32700。
+
+    Windows 关键：真实 stdio 一律走二进制层强制 UTF-8 解码——
+    文本层默认跟随系统 locale（中文 Windows=GBK），宿主按 UTF-8 解必乱码。
+    """
+    buf = getattr(fp, "buffer", None)
+    if buf is not None:  # 真实 stdio：二进制读 + UTF-8 解码
+        raw = buf.readline()
+        if not raw:
+            return None
+        line = raw.decode("utf-8", errors="replace").strip()
+    else:  # 测试注入的 StringIO 等文本流
+        line = fp.readline()
+        if not line:
+            return None
+        line = line.strip()
     if not line:  # 空行容错跳过
         return {}
     try:
@@ -41,10 +52,22 @@ def read_message(fp: TextIO) -> Optional[dict]:
 
 
 def write_message(msg: dict, fp: Optional[TextIO] = None) -> None:
-    """写一条消息（单行 JSON + 换行 + flush；不 flush 宿主会一直等）。"""
-    fp = fp if fp is not None else sys.stdout
-    fp.write(json.dumps(msg, ensure_ascii=False) + "\n")
-    fp.flush()
+    """写一条消息（单行 UTF-8 JSON + 换行 + flush；不 flush 宿主会一直等）。
+
+    Windows 关键：输出走二进制层以 UTF-8 编码，绕开文本层的 GBK locale——
+    否则 tools/list 的中文描述到宿主手里就是乱码。
+    """
+    data = (json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8")
+    if fp is None:
+        buf = sys.stdout.buffer
+    else:
+        buf = getattr(fp, "buffer", None)
+        if buf is None:  # 测试注入的文本流退回文本写
+            fp.write(json.dumps(msg, ensure_ascii=False) + "\n")
+            fp.flush()
+            return
+    buf.write(data)
+    buf.flush()
 
 
 def result_response(msg_id: Any, result: dict) -> dict:

@@ -122,6 +122,11 @@ def handle_message(msg: dict) -> dict | None:
 
 def main() -> int:
     """stdio 主循环：读一行处理一行；EOF/Ctrl+C 正常退出。"""
+    # 双保险：协议层已走二进制 UTF-8；这里再把文本层也钉死 UTF-8，
+    # 防止 Windows 下任何遗漏的文本 IO 落回 GBK locale。
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     logger.info("MCP server 启动（stdio, tools=%d）", len(TOOLS_SCHEMA))
     try:
         while True:
