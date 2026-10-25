@@ -1,97 +1,109 @@
 # 个人档案（PersonalProfile）
 
-> 状态：**CLI 端 + Web 端均已实现**（零第三方依赖，仅 Python 标准库）
+> **让任何 AI 都懂你：本地个人档案系统，AI 个性化协作的单一事实源。**
+> 零第三方依赖（仅 Python 标准库）· 纯本地运行 · 数据自持（单文件 JSON）
 
-## 项目定位
-**本地个人 AI 档案系统**：在本地管理「个人档案」类信息（人物卡、身体/精神/时间线数据等）。
-- 运行：纯本地个人使用，不部署、无登录、零第三方依赖（仅 Python 标准库）。
-- 核心诉求：时间轴切分人格（每时间节点的"他"互相独立）+ 跨时间连贯性（显式链接串回同一人）。
+AI 每次对话都从零认识你一遍——称呼靠猜、偏好靠编、健康数据不敢给。PersonalProfile 把「你是谁」沉淀成本地档案，任何支持 MCP 的 AI（WorkBuddy / Claude / Cursor…）在做**任何个性化需求**时都从这里取数：称呼、偏好、健康体检、技能经历、重要关系、目标计划。**档案里没有的事实，AI 不编造。**
+
+## 核心理念
+
+1. **时间轴切分人格**：每个时间节点的「他」互相独立（快照），历史任务可精确回溯某时期。
+2. **跨时间连贯性**：属性级连贯性链接（继承/因果/主动重塑）把不同时期的属性显式串回同一个人。
+3. **增量存储**：快照 = 继承指针 + 仅存差异（overrides）；读沿链合并，写 copy-on-write，永不重复录入。
+4. **AI 单一事实源**：读广写严——AI 可任意查询（MCP 只读），写统一走受控通道，快照推进永远由你确认。
+
+## 功能全景
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| **Web 可视化** | `pp.bat` 双击 / `python -m personal_profile.web.server` | 时间轴 + 属性级关联图谱 + 树状详情（拖拽排序/悬浮卡片/整节点删除），http://127.0.0.1:8765 |
+| **提问库 /qbank** | Web 页顶栏「📝 提问库」 | P0 85 指标 10 领域，逐题采集答题直接转快照；volatile 指标（体检等）自动建新时间态 |
+| **MCP Server（AI 接入）** | `python -m personal_profile.mcp` | 6 个只读工具，任何 MCP 宿主即插即用，**AI 个性化协作的主通道** |
+| **CLI** | `python -m personal_profile` | 11+ 子命令，输出 JSON（供 AI 解析），`--pretty` 人读 |
+| **AI 采集** | Web「✦ AI 采集」/ CLI `collect` | OpenAI 兼容模型（混元/DeepSeek/Ollama）自然语言直录档案 |
+| **一键脚本** | 项目根 `pp.bat` | start（双击即启+开浏览器）/ stop / restart / status |
+| **运行日志** | `logs/{web,cli,mcp}.log` | 自动轮转，请求留痕，MCP 调用审计 |
+
+## AI 个性化协作（重点）
+
+### 接入：三步让 AI 用上你的档案
+
+```jsonc
+// 1. 宿主 MCP 配置（如 ~/.workbuddy/mcp.json）
+{ "mcpServers": { "personal-profile": {
+    "command": "python", "args": ["-m", "personal_profile.mcp"],
+    "cwd": "<项目根>" } } }
+```
+2. 连接器管理页对该 server 点「信任」；
+3. 把 `personal_profile/mcp/AGENT_PROMPT.md` 的规则贴进 agent 系统提示/自定义指令——这是让 AI「想到用」的关键。
+
+### 6 个只读工具
+
+| 工具 | 用途 |
+|---|---|
+| `pp_list_persons` | 档案里有谁（含最新时间态） |
+| `pp_get_profile` | **个性化主查询**：某时间态全量档案值（合并继承，含值来源标注） |
+| `pp_query_path` | 前缀精准取数（`"inbody"` 命中整个健康子树），省 token |
+| `pp_timeline` | 时间轴概览：「他在某时期是什么样」 |
+| `pp_search` | 关键词模糊找指标 |
+| `pp_qbank_progress` | 答题进度 + 缺口样例：AI 主动引导你补全档案 |
+
+### 触发规则（AGENT_PROMPT.md 摘要）
+
+凡任务涉及**称呼身份 / 健康建议 / 写作风格偏好 / 简历技能 / 送礼沟通 / 目标计划**，AI 必须先查档案再作答；档案没有的明确说没有并引导你去 /qbank 补录；对话中发现新事实**不直接写库**（MCP 源码级禁写），由你在 Web 页确认落库——写永远走 Web API 单写者，杜绝并发写坏数据。
+
+### 时间语义
+
+AI 默认拿「最新 resolved 态」；问「过去的你」时经 `pp_timeline` 选快照、带 `snapshot_id` 精确回溯。每项值的 `source` 字段标注来自哪个快照（本态 or 继承自历史态）。
 
 ## 快速开始
+
 ```bash
-# 前提：Python 3.10+，无需 pip install；在项目根目录执行
-python -m personal_profile --help
+# ① 双击 pp.bat（Windows）→ 自动启动 Web + 开浏览器
+#    或手动：
+python -m personal_profile.web.server          # Web 端
+python -m personal_profile.mcp                 # MCP stdio server（宿主拉起，勿手动常驻）
 
-# Web 端（可视化时间轴 + 关联关系图谱）
-python -m personal_profile.web.server    # 打开 http://127.0.0.1:8765
-
-# 建人 → 建时间快照 → 按维度路径写值 → 时间轴查看
+# ② CLI 全流程
 python -m personal_profile add-person --name 张三
 python -m personal_profile add-snapshot --person p_xxx --timestamp 2020-01-01 --label "20岁的张三"
 python -m personal_profile set --person p_xxx --snapshot s_xxx --path physical.body_shape.height --value 175 --unit cm
-python -m personal_profile get --person p_xxx --snapshot s_xxx --path physical.body_shape.height
 python -m personal_profile tree --person p_xxx --pretty
 ```
-- 输出默认 JSON（供 AI 解析），`--pretty` 切人类可读。
-- 数据文件：`data/archive.json`（运行时自动创建；可用 `--data` 或环境变量 `PP_DATA` 换路径）。
+- 数据：`data/archive.json`（自动创建；`PP_DATA` / `PP_PORT` 环境变量可覆盖）。
 
-## 命令一览
-| 命令 | 作用 |
-| --- | --- |
-| `add-person` / `list-persons` | 新增 / 列出人物 |
-| `add-snapshot` | 新增时间快照（`--inherits-from` 指向父态 = 增量继承；不传 = 独立根态） |
-| `set-inherits` | 给**已存在**的快照设置/修改/清除继承关系（`--parent none` 清除；含成环防护） |
-| `set` | 写值（copy-on-write 只写本态 overrides；支持模板外自由维度） |
-| `get` | 取值（沿继承链合并解析） |
-| `del-value` | 删本态覆盖（父态值重新生效） |
-| `tree` | 时间轴视图（默认视图）：快照按时间排列 + 合并后叶子 + 链接 |
-| `links` / `add-link` / `rm-link` | 连贯性链接（**属性级**：快照A的某属性 ↔ 快照B的某属性；`add-link --from-path/--to-path`） |
-| `collect` | AI 采集（`--collector openai-compatible`，配置见下节） |
+## 架构与工程化
 
-## 架构（1 核心 + 2 端，可拓展）
 ```
 PersonalProfile/
-├── data/                        # 运行时数据（archive.json / config.json，自动生成）
-├── docs/                        # 设计文档
-└── personal_profile/            # 主包（python -m personal_profile）
-    ├── paths.py                 # 路径单一事实来源（ROOT/DATA/CONFIG/SCHEMA）
-    ├── __main__.py              # python -m personal_profile → CLI
-    ├── core/
-    │   ├── store.py             # 唯一读写入口 Archive：增量解析/path/链接/持久化
-    │   └── config.py            # 模型配置读写（data/config.json）
-    ├── ai/
-    │   └── collector.py         # 采集器抽象 + 注册表（新增模型实现即插即用）
-    ├── cli/
-    │   ├── main.py              # CLI 入口：参数解析 + 统一 JSON 错误输出
-    │   └── commands.py          # 子命令定义（新增命令 = 1 个 handler + 1 段注册）
-    ├── web/
-    │   ├── server.py            # HTTP 服务 + JSON API（零依赖 ThreadingHTTPServer）
-    │   ├── templates/index.html # 页面骨架 + 模态
-    │   └── static/
-    │       ├── css/style.css    # 浅色现代风格
-    │       └── js/              # 前端按职责拆分（ES Module，无构建工具）
-    │           ├── main.js      # 入口：初始化 + window 处理器挂载
-    │           ├── state.js     # 全局状态 + 链接样式
-    │           ├── api.js       # HTTP 封装
-    │           ├── util.js      # 工具（转义/toast/弹窗开关）
-    │           ├── view.js      # 人物切换/加载
-    │           ├── timeline.js  # 时间轴渲染 + SVG 关联连线 + 快照选择
-    │           ├── detail.js    # 详情面板（值来源标注）
-    │           ├── actions.js   # 写操作（人物/快照/链接/值/采集/配置）
-    │           └── modals.js    # 模态动态填充
-    └── assets/
-        └── dimensions.json      # 维度模板（仅结构，无值；扩展维度改这里）
+├── pp.bat                       # 一键服务脚本
+├── data/                        # archive.json / config.json（gitignore，不外泄）
+├── logs/                        # web/cli/mcp 轮转日志（gitignore）
+├── docs/                        # 设计文档（数据模型/实现/提问库/AI接入）
+├── tests/
+│   └── test_mcp.py              # 端到端 19 项（协议/工具/只读回归/隔离检查）
+└── personal_profile/            # 主包
+    ├── paths.py                 # 路径单一事实来源
+    ├── core/                    # ★ 主模块：store.py（Archive 唯一读写入口）+ qbank.py + logutil.py
+    ├── web/                     # 展示模块：server.py + qbank_api.py + 原生 ES Module 前端
+    ├── mcp/                     # AI 接入模块：protocol.py + tools.py + server.py + AGENT_PROMPT.md
+    ├── cli/  ├── ai/            # 命令行 / AI 采集器（OpenAI 兼容，即插即用）
+    └── assets/                  # dimensions.json（维度模板）+ question_bank.json（题库唯一权威）
 ```
-Web 端可视化要点：
-- **时间轴视图**：快照按时间排列为节点卡片，显示合并后值预览（展示名优先）与覆盖数。
-- **关联关系图谱**：快照属性间的 `continuity_link`（`from+from_path → to+to_path`）绘制为 SVG 曲线，四类语义四色区分（继承蓝/因果绿/断裂红虚线/主动重塑紫点线），连线中点标注属性，悬停显示完整说明。
-- **值来源标注**：详情面板每个值标注「本态」或「← 继承自某快照」，直观呈现增量模型；分组标题用维度中文名。
-- **全操作在线**：建人物/快照/链接（可勾选"同步建立继承关系"）、设置继承、写值（覆盖即编辑）、删本态覆盖、AI 采集，均可页面完成。
-设计要点（详见 `docs/`）：
-- **增量存储**：快照 = `inherits_from`（父态指针）+ `overrides`（扁平 path→叶子，仅存差异）；读沿链合并、写 copy-on-write。
-- **path 即寻址**：path 不落库，按 `.` 切分派生；本态直查天然 O(1)。
-- **模块化**：新端只需复用 `core/store.py`；新采集器只需实现 `Collector` 接口；前端新模块按职责加文件并在 `main.js` 挂载。
 
-## 文档
+**三模块独立性是工程红线（测试强制）**：`core`（主模块）/ `web`（展示）/ `mcp`（AI 接入）互不依赖，只准依赖 core——`tests/test_mcp.py` 静态扫描 import 强制，违规即失败。MCP 源码级禁写（只调 Archive 读方法，每次调用重新加载，对 Web/CLI 写入实时可见）。
+
+## 文档索引
 - `docs/data-model.md` —— 数据结构定稿
-- `docs/implementation.md` —— 技术实现方案定稿（§8.3 为 CLI 暴露能力确认清单）
+- `docs/implementation.md` —— 技术实现方案
+- `docs/question-bank.md` —— 提问库设计（指标预命名 / 答题转快照）
+- `docs/agent-integration.md` —— AI Agent 接入设计（四形态对比 / MCP P0 实现现状）
 - `docs/sample-archive.json` —— 覆盖各场景的完整数据样例
 
-## AI 采集模型配置
-- **页面配置**：打开「✦ AI 采集」弹窗 → 展开「模型设置」→ 填 Base URL / API Key / 模型名 → 保存配置（密钥明文存 `data/config.json`，勿提交版本库；页面不回传完整密钥）。
-- **CLI 配置**：直接编辑 `data/config.json`（字段 base_url / api_key / model），然后：
-  `python -m personal_profile collect --person p_xxx --snapshot s_xxx --prompt "..." --collector openai-compatible`
-- 兼容端点（任选其一）：腾讯混元 `https://api.hunyuan.cloud.tencent.com/v1` · DeepSeek `https://api.deepseek.com/v1` · 本地 Ollama `http://127.0.0.1:11434/v1`（无需 key）。
+## Roadmap
+- **P1** 写通道 `pp_suggest_fact`（AI 建议落库 + 确认流）、WorkBuddy skill 封装、题库扩至 ~600 题
+- **P2** 敏感维度分级脱敏、MCP 审计增强、跨人物全局视图 / 雷达图
 
-## 下一步
-- 可视化增强可选方向：跨人物全局视图、维度雷达图、数据导入导出。
+---
+
+*License：见仓库 LICENSE · 数据 100% 本地，档案即主权。*
