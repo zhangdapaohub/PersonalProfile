@@ -17,7 +17,7 @@ from personal_profile.mcp.tools import HANDLERS, new_archive
 logger = get_logger("mcp", console=False)  # 日志落 logs/mcp.log；绝不污染 stdout
 
 PERSON_ARG = {
-    "person": {"type": "string", "description": "人物 id 或唯一人物名"},
+    "person": {"type": "string", "description": "人物 id 或唯一人物名（先用 pp_list_persons 查）"},
 }
 SNAP_ARG = {
     "snapshot_id": {"type": "string", "description": "快照 id（可选，缺省=最新时间态）"},
